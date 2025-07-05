@@ -49,48 +49,130 @@ void DataToCloud(struct data *d)
 	    	sprintf((char*)CH4,"%f",d->adc4_value);
 	    	sprintf((char*)MDS,"%f",d->MDS_value);
 
-	    		if(d->GPIO[0]==1)
+//////////////////////////////////////STATUS 1////////////////////////////////////////////////////
+	    		if(d->config[0]== 1)
 	    		{
 	    			strcpy(d->Status1, "HIGH");
 	    		}
-	    		else
+	    		else if (d->config[0]==2)
 	    		{
 	    			strcpy(d->Status1, "LOW");
 	    		}
-
-	    		if(d->GPIO[1]==1)
+	    		else if((d->GPIO[0]==1)&&(d->config[0]==3))
 	    		{
-	    			strcpy(d->Status2, "HIGH");
+	    			strcpy(d->Status1, "HIGH");
 	    		}
+	    		else if((d->GPIO[0]==0)&&(d->config[0]==3))
+				{
+					strcpy(d->Status1, "LOW");
+				}
 	    		else
 	    		{
-	    			strcpy(d->Status2, "LOW");
+	    			strcpy(d->Status1, "NC");
 	    		}
 
-	    		if(d->GPIO[2]==1)
-	    		{
-	    			strcpy(d->Status3, "HIGH");
-	    		}
-	    		else
-	    		{
-	    			strcpy(d->Status3, "LOW");
-	    		}
+//////////////////////////////////////STATUS 2////////////////////////////////////////////////////
+	    		if(d->config[1]== 1)
+				{
+					strcpy(d->Status2, "HIGH");
+				}
+				else if (d->config[1]==2)
+				{
+					strcpy(d->Status2, "LOW");
+				}
+				else if((d->GPIO[1]==1)&&(d->config[1]==3))
+				{
+					strcpy(d->Status2, "HIGH");
+				}
+				else if((d->GPIO[1]==0)&&(d->config[1]==3))
+				{
+					strcpy(d->Status2, "LOW");
+				}
+				else
+				{
+					strcpy(d->Status2, "NC");
+				}
 
-	    		if(d->GPIO[3]==1)
-	    		{
-	    			strcpy(d->Status4, "HIGH");
-	    		}
-	    		else
-	    		{
-	    			strcpy(d->Status4, "LOW");
-	    		}
+//////////////////////////////////////STATUS 3////////////////////////////////////////////////////
+	    		if(d->config[2]== 1)
+				{
+					strcpy(d->Status3, "HIGH");
+				}
+				else if (d->config[2]==2)
+				{
+					strcpy(d->Status3, "LOW");
+				}
+				else if((d->GPIO[2]==1)&&(d->config[2]==3))
+				{
+					strcpy(d->Status3, "HIGH");
+				}
+				else if((d->GPIO[2]==0)&&(d->config[2]==3))
+				{
+					strcpy(d->Status3, "LOW");
+				}
+				else
+				{
+					strcpy(d->Status3, "NC");
+				}
+
+//////////////////////////////////////STATUS 4////////////////////////////////////////////////////
+	    		if(d->config[3]== 1)
+				{
+					strcpy(d->Status4, "HIGH");
+				}
+				else if (d->config[3]==2)
+				{
+					strcpy(d->Status4, "LOW");
+				}
+				else if((d->GPIO[3]==1)&&(d->config[3]==3))
+				{
+					strcpy(d->Status4, "HIGH");
+				}
+				else if((d->GPIO[3]==0)&&(d->config[3]==3))
+				{
+					strcpy(d->Status4, "LOW");
+				}
+				else
+				{
+					strcpy(d->Status4, "NC");
+				}
+
+
+
+//	    		if(d->GPIO[1]==1)
+//	    		{
+//	    			strcpy(d->Status2, "HIGH");
+//	    		}
+//	    		else
+//	    		{
+//	    			strcpy(d->Status2, "LOW");
+//	    		}
+//
+//	    		if(d->GPIO[2]==1)
+//	    		{
+//	    			strcpy(d->Status3, "HIGH");
+//	    		}
+//	    		else
+//	    		{
+//	    			strcpy(d->Status3, "LOW");
+//	    		}
+//
+//	    		if(d->GPIO[3]==1)
+//	    		{
+//	    			strcpy(d->Status4, "HIGH");
+//	    		}
+//	    		else
+//	    		{
+//	    			strcpy(d->Status4, "LOW");
+//	    		}
+
 
 	    if (!initialized)
 	    {
 	        base_minute = curr_min;
 	        base_second = curr_sec;
-	        d->scan_time=5;
 	        DataToPass();
+	        //dataToUart();
 	        initialized = 1;
 	        return;
 	    }
@@ -111,6 +193,7 @@ void DataToCloud(struct data *d)
 	        base_minute = curr_min;   // Update reference for next transmission
 	        base_second = curr_sec;
 	        DataToPass();
+	        //dataToUart();
 	    }
 }
 

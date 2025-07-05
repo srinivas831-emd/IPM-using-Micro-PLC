@@ -25,9 +25,11 @@ void extract_cloud_data(char* WifiData);
 void cloud_set_output(struct data *d);
 void cloud_reset_output(struct data *d1);
 void cloud_read_pinstatus(struct data *d2);
-bool GSM_SendSMS();
+void GSM_SendSMS();
 bool GSM_Init(void);
 bool GSM_SendCommandandSMS(const char *cmd, uint32_t timeout);
+void SendSmsBody(void);
+bool GSM_WaitForResponse(uint32_t timeout);
 
 
 

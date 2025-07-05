@@ -22,6 +22,7 @@
 #include "circular_queue.h"
 #include "app_config.h"
 #include"com_terminal.h"
+#include"EEPROM.h"
 #define GSM_RX_BUFFER_SIZE 512
 
 extern char CH1[10];
@@ -130,31 +131,34 @@ void USERRCV_GPIO_Init()
 	/* USER CODE END MX_GPIO_Init_2 */
 }
 
-
 void DataToGSM(struct data *d)
 {
+	char fullMessage[200];
+	snprintf(fullMessage, sizeof(fullMessage),
+    "TIME,%02d:%02d:%02d\r\n"
+    "DATE,%02d/%02d/%02d\r\n"
+    "CH1,%s\r\nCH2,%s\r\nCH3,%s\r\nCH4,%s\r\n"
+    "MDS,%s\r\n"
+    "GPIO0,%s\r\nGPIO1,%s\r\nGPIO2,%s\r\nGPIO3,%s\r\n",
+    d->hour, d->minutes, d->seconds,
+    d->dayofmonth, d->month, d->year,
+    CH1, CH2, CH3, CH4, MDS,
+    d->Status1, d->Status2, d->Status3, d->Status4);
 
 	  if(GSM_Init())
 	  {
-//		  uart3_tx("\r\nSUCESSFULLY INITTIALIZED\r\n");
-//	  }
-		  if(GSM_SendSMS())
-		  {
-		      uart3_tx((uint8_t*)"\r\nSMS SENT SUCCESFULLY\r\n");
-		      return;
-		  }
-		  else
-		  {
-			  uart3_tx((uint8_t*)"\r\nGSM ERROR INITIALIZED BUT DID NOT SEND SMS\r\n");
-			  return;
-		  }
-	  }
-	  else
-	  {
-		  uart3_tx((uint8_t*)"\r\nGSM ERROR DID NOT INTIALIZED\r\n");
-		  return;
+		  EEPROM_ReadAllMessagesAndErase();
+		  GSM_SendSMS(fullMessage);
+		  uart3_tx((uint8_t*)"\r\nSMS SENT SUCCESFULLY\r\n");
 	  }
 
+	  else
+	  {
+
+		  EEPROM_StoreMessage(fullMessage);
+		  uart3_tx((uint8_t*)"\r\nGSM ERROR INITIALIZED BUT DID NOT SEND SMS\r\n");
+		  return;
+	  }
 }
 
 bool GSM_WaitForResponse(uint32_t timeout)
@@ -162,8 +166,6 @@ bool GSM_WaitForResponse(uint32_t timeout)
     uint8_t gsmBuffer[GSM_RX_BUFFER_SIZE] = {0};
     uint16_t idx = 0;
     uint8_t ch;
-    uint32_t tickstart = HAL_GetTick();
-
 	while (!CircularQueue_IsEmpty(&rxwifiQueue))
 	{
     	if (CircularQueue_Dequeue(&rxwifiQueue, &ch))
@@ -197,7 +199,7 @@ bool GSM_SendCommandandSMS(const char *cmd, uint32_t timeout)
         d.ExpectingGsmResponse = 1;  // MUST set BEFORE transmission
 
         HAL_UART_Transmit(&huart4, (uint8_t *)cmd, strlen(cmd), HAL_MAX_DELAY);
-//        HAL_UART_Receive_IT(&huart4, rxwifiBuffer,1);
+        HAL_UART_Receive_IT(&huart4, rxwifiBuffer,1);
         bool success = GSM_WaitForResponse(timeout);
 
         d.ExpectingGsmResponse = 0;
@@ -215,68 +217,53 @@ bool GSM_SendCommandandSMS(const char *cmd, uint32_t timeout)
 
 bool GSM_Init(void)
 {
+    CircularQueue_Init(&rxwifiQueue);  // Clear residual data
+
 
     if (!GSM_SendCommandandSMS("ATE0\r\n", 1000))
     {
-    	uart3_tx("\rATE0 failed\r");
+    	uart3_tx((uint8_t *)"\rATE0 failed\r");
     	return false;
     }
     HAL_Delay(1000);
     if (!GSM_SendCommandandSMS("AT\r\n", 1000))
     {
-    	uart3_tx("\rAT failed\r");
+    	uart3_tx((uint8_t *)"\rAT failed\r");
     	return false;
     }
     HAL_Delay(1000);
     if (!GSM_SendCommandandSMS("AT+CMGF=1\r\n", 1000))
     {
-    	uart3_tx("AT+CMGF=1\r");
+    	uart3_tx((uint8_t *)"AT+CMGF=1\r");
     	return false;
     }
 
-    // Optional memory cleanup (remove if causing issues)
-    GSM_SendCommandandSMS("AT+CMGD=1,4\r", 2000);
+
     return true;
 }
 
-bool GSM_SendSMS()
+
+void GSM_SendSMS(char *a)
 {
-    char cmd[64];
-    sprintf(cmd, "AT+CMGS=\"+919663940666\"\r");
+	char cmd[64];
+	sprintf(cmd, "AT+CMGS=\"+918317370381\"\r");
 
-    // Phase 1: Send recipient number
-    if (!GSM_SendCommandandSMS(cmd, 2000))
-    {
-        return false;
-    }
+	// Phase 1: Send recipient number
+	GSM_SendCommandandSMS(cmd, 2000);
 
-    // Phase 2: Send message content
-    char fullMessage[160];
-    snprintf(fullMessage, sizeof(fullMessage),
-        "TIME,%02d:%02d:%02d\r\n"
-        "DATE,%02d/%02d/%02d\r\n"
-        "CH1,%s\r\nCH2,%s\r\nCH3,%s\r\nCH4,%s\r\n"
-        "MDS,%s\r\n"
-        "GPIO0,%s\r\nGPIO1,%s\r\nGPIO2,%s\r\nGPIO3,%s\r\n",
-        d.hour, d.minutes, d.seconds,
-        d.dayofmonth, d.month, d.year,
-        CH1, CH2, CH3, CH4, MDS,
-        d.Status1, d.Status2, d.Status3, d.Status4);
-    uart3_tx(&fullMessage);
-    // Critical: Set response routing BEFORE transmission
-    CircularQueue_Init(&rxwifiQueue);
-    d.ExpectingGsmResponse = 1;
+	uart3_tx((uint8_t *)a);
+	// Critical: Set response routing BEFORE transmission
+	CircularQueue_Init(&rxwifiQueue);
 
-    HAL_UART_Transmit(&huart4, (uint8_t*)fullMessage, strlen(fullMessage), HAL_MAX_DELAY);
-    uint8_t ctrlZ = 0x1A;
-    HAL_UART_Transmit(&huart4, &ctrlZ, 1, HAL_MAX_DELAY);
-
-    // Phase 3: Wait for confirmation
-    d.ExpectingGsmResponse = 0;
-    CircularQueue_Init(&rxwifiQueue);  // Clear residual data
-
-    return true;
+	HAL_UART_Transmit(&huart4, (uint8_t*)a, strlen(a), HAL_MAX_DELAY);
+	uint8_t ctrlZ = 0x1A;
+	HAL_UART_Transmit(&huart4, &ctrlZ, 1, HAL_MAX_DELAY);
+	CircularQueue_Init(&rxwifiQueue);  // Clear residual data
+	// Optional memory cleanup (remove if causing issues)
+	GSM_SendCommandandSMS("AT+CMGD=1,4\r", 2000);
 }
+
+
 
 void DataToWiFi(struct data *d)
 {

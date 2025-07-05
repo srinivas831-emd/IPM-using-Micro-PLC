@@ -44,7 +44,7 @@ struct data
 	char GSM;
 	char PhoneNumber[15];
 	char ExpectingGsmResponse;
-
+	char Mode;
 };
 
 extern struct data d;

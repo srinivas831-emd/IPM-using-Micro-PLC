@@ -80,7 +80,10 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 //	        }
 //	        else
 //	        {
-	            CircularQueue_Enqueue(&rxwifiQueue, rxwifiBuffer);
+	            if(!CircularQueue_Enqueue(&rxwifiQueue, rxwifiBuffer))
+	            {
+
+	            }
 
 //	        }
 	        HAL_UART_Receive_IT(&huart4, &rxwifiBuffer, 1);
@@ -125,22 +128,22 @@ void Process_Commands(void)
 
 void set_output(struct data *d)
 {
-	if(d->config[0] == 0)
+	if(d->config[0] == 1)
 	{
 		d->GPIO[0] = write_gpio(GPIOB,GPIO_PIN_2, PIN_SET);
 	}
 
-	if(d->config[1] == 0)
+	if(d->config[1] == 1)
 	{
 		d->GPIO[1] = write_gpio(GPIOC,GPIO_PIN_1, PIN_SET);
 	}
 
-	if(d->config[2] == 0)
+	if(d->config[2] == 1)
 	{
 		d->GPIO[2] = write_gpio(GPIOB,GPIO_PIN_4, PIN_SET);
 	}
 
-	if(d->config[3] == 0)
+	if(d->config[3] == 1)
 	{
 		d->GPIO[3] = write_gpio(GPIOB,GPIO_PIN_5, PIN_SET);
 	}
@@ -172,19 +175,19 @@ void reset_output(struct data *d1)
 
 void read_pinstatus(struct data *d2)
 {
-	if(d2->config[0]==1)
+	if(d2->config[0]==3)
 	{
 		d2->GPIO[0]=read_gpio( GPIOB,GPIO_PIN_2);
 	}
-	if(d2->config[1]==1)
+	if(d2->config[1]==3)
 	{
 		d2->GPIO[1]=read_gpio(GPIOC,GPIO_PIN_1);
 	}
-	if(d2->config[2]==1)
+	if(d2->config[2]==3)
 	{
 		d2->GPIO[2]=read_gpio( GPIOB,GPIO_PIN_4);
 	}
-	if(d2->config[3]==1)
+	if(d2->config[3]==3)
 	{
 		d2->GPIO[3]=read_gpio( GPIOB,GPIO_PIN_5);
 	}
@@ -285,6 +288,10 @@ void pin_config()
 	{
 		switch_val=13;
 	}
+	else if (strcmp(arr1,"MODE")==0)
+	{
+		switch_val=14;
+	}
 
 
 	switch(switch_val)
@@ -295,7 +302,7 @@ void pin_config()
 		if(strcmp(arr2,"HIGH")==0)
 		{
 				user_GPIO_Init(GPIOB,GPIO_PIN_2,OUTPUT);
-				d.config[0] = 0;
+				d.config[0] = 1;
 		}
 
 		else if(strcmp(arr2,"LOW")==0)
@@ -307,7 +314,7 @@ void pin_config()
 		else if(strcmp(arr2,"INPUT")==0)
 		{
 				user_GPIO_Init(GPIOB,GPIO_PIN_2,INPUT);
-				d.config[0] = 1;
+				d.config[0] = 3;
 		}
 		break;
 
@@ -316,7 +323,7 @@ void pin_config()
 		if(strcmp(arr2,"HIGH")==0)
 		{
 			user_GPIO_Init(GPIOC,GPIO_PIN_1,OUTPUT);
-			d.config[1]=0;
+			d.config[1]=1;
 		}
 
 		else if(strcmp(arr2,"LOW")==0)
@@ -328,7 +335,7 @@ void pin_config()
 		else if(strcmp(arr2,"INPUT")==0)
 		{
 			user_GPIO_Init(GPIOC,GPIO_PIN_1,INPUT);
-			d.config[1]=1;
+			d.config[1]=3;
 		}
 		break;
 
@@ -338,7 +345,7 @@ void pin_config()
 		if(strcmp(arr2,"HIGH")==0)
 		{
 			user_GPIO_Init(GPIOB,GPIO_PIN_4,OUTPUT);
-			d.config[2]=0;
+			d.config[2]=1;
 		}
 		else if(strcmp(arr2,"LOW")==0)
 		{
@@ -349,7 +356,7 @@ void pin_config()
 		else if(strcmp(arr2,"INPUT")==0)
 		{
 			user_GPIO_Init(GPIOB,GPIO_PIN_4,INPUT);
-			d.config[2]=1;
+			d.config[2]=3;
 		}
 
 		break;
@@ -359,7 +366,7 @@ void pin_config()
 		if(strcmp(arr2,"HIGH")==0)
 		{
 			user_GPIO_Init(GPIOB,GPIO_PIN_5,OUTPUT);
-			d.config[3]=0;
+			d.config[3]=1;
 		}
 		else if(strcmp(arr2,"LOW")==0)
 		{
@@ -369,7 +376,7 @@ void pin_config()
 		else if(strcmp(arr2,"INPUT")==0)
 		{
 			user_GPIO_Init(GPIOB,GPIO_PIN_5,INPUT);
-			d.config[3]=1;
+			d.config[3]=3;
 		}
 		break;
 
@@ -499,11 +506,23 @@ void pin_config()
 		strcpy(d.password,arr2);
 		break;
 	case 12:
-			strcpy(d.eeprom_data,arr2);
-			break;
+		strcpy(d.eeprom_data,arr2);
+		break;
 	case 13:
-			strcpy(d.PhoneNumber,arr2);
-			break;
+		strcpy(d.PhoneNumber,arr2);
+		break;
+	case 14:
+		if(strcmp(arr2,"SMS")==0)
+		{
+			d.Mode=0;
+		}
+
+		else if(strcmp(arr2,"GSHEET")==0)
+		{
+			d.Mode=1;
+		}
+
 
 	}
 }
+
