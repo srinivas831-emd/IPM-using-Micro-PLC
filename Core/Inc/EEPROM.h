@@ -28,6 +28,9 @@ void EEPROM_Read (uint16_t page, uint16_t offset, uint8_t *data, uint16_t size);
 void EEPROM_PageErase (uint16_t page);
 void EEPROM_StoreMessage(char *message);
 void EEPROM_ReadAllMessagesAndErase(void);
+void NormalizeToMultilineFormat(const char *input, char *output, size_t outputSize);
+void CSVtoQueryString(const char *input, char *output, size_t outputSize);
+
 
 void EEPROM_Write_NUM (uint16_t page, uint16_t offset, float  fdata);
 float EEPROM_Read_NUM (uint16_t page, uint16_t offset);

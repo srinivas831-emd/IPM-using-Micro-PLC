@@ -121,8 +121,8 @@ int main(void)
   /* USER CODE BEGIN 2 */
     d.WiFi=0;
     d.GSM=1;
-    d.scan_time=2;
-    d.Mode=0;
+    d.scan_time=10;
+    d.Mode=1;
 	user_USART1_UART_Init();
 	USER_I2C3_INIT();
 	USER_I2C1_Init();

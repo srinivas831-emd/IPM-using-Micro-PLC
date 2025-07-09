@@ -68,7 +68,7 @@ void DataToCloud(struct data *d)
 				}
 	    		else
 	    		{
-	    			strcpy(d->Status1, "NC");
+	    			strcpy(d->Status1, "UNKNOWN");
 	    		}
 
 //////////////////////////////////////STATUS 2////////////////////////////////////////////////////
@@ -90,7 +90,7 @@ void DataToCloud(struct data *d)
 				}
 				else
 				{
-					strcpy(d->Status2, "NC");
+					strcpy(d->Status2, "UNKNOWN");
 				}
 
 //////////////////////////////////////STATUS 3////////////////////////////////////////////////////
@@ -112,7 +112,7 @@ void DataToCloud(struct data *d)
 				}
 				else
 				{
-					strcpy(d->Status3, "NC");
+					strcpy(d->Status3, "UNKNOWN");
 				}
 
 //////////////////////////////////////STATUS 4////////////////////////////////////////////////////
@@ -134,37 +134,11 @@ void DataToCloud(struct data *d)
 				}
 				else
 				{
-					strcpy(d->Status4, "NC");
+					strcpy(d->Status4, "UNKNOWN");
 				}
 
 
 
-//	    		if(d->GPIO[1]==1)
-//	    		{
-//	    			strcpy(d->Status2, "HIGH");
-//	    		}
-//	    		else
-//	    		{
-//	    			strcpy(d->Status2, "LOW");
-//	    		}
-//
-//	    		if(d->GPIO[2]==1)
-//	    		{
-//	    			strcpy(d->Status3, "HIGH");
-//	    		}
-//	    		else
-//	    		{
-//	    			strcpy(d->Status3, "LOW");
-//	    		}
-//
-//	    		if(d->GPIO[3]==1)
-//	    		{
-//	    			strcpy(d->Status4, "HIGH");
-//	    		}
-//	    		else
-//	    		{
-//	    			strcpy(d->Status4, "LOW");
-//	    		}
 
 
 	    if (!initialized)

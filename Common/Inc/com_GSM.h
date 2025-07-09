@@ -30,6 +30,10 @@ bool GSM_Init(void);
 bool GSM_SendCommandandSMS(const char *cmd, uint32_t timeout);
 void SendSmsBody(void);
 bool GSM_WaitForResponse(uint32_t timeout);
+void DataToPhone(char * Message);
+void DataToGsheet();
+bool GSMInitGsheet();
+bool HTTPInitAndSend(char *dataToSend);
 
 
 

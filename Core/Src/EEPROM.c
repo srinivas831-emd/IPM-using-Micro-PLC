@@ -16,11 +16,14 @@
 
   ******************************************************************************
 */
-
+#include <string.h>
+#include <stdbool.h>
+#include <stdio.h>
 #include "EEPROM.h"
 #include "math.h"
 #include "string.h"
 #include "com_GSM.h"
+#include "com_terminal.h"
 
 // Define the I2C
 extern I2C_HandleTypeDef hi2c3;;
@@ -112,7 +115,6 @@ void EEPROM_Read (uint16_t page, uint16_t offset, uint8_t *data, uint16_t size)
 
 void EEPROM_PageErase (uint16_t page)
 {
-	char msg[20];
 	int paddrposition = log(PAGE_SIZE)/log(2);
 	uint16_t MemAddress = page<<paddrposition;
 	uint8_t data[PAGE_SIZE];
@@ -159,6 +161,7 @@ void EEPROM_ReadAllMessagesAndErase(void)
     EEPROM_Read(EEPROM_FLAG_PAGE, EEPROM_FLAG_OFFSET, &flag, 1);
     EEPROM_Read(EEPROM_FLAG_PAGE, EEPROM_COUNT_OFFSET, &count, 1);
 
+
     if (flag != 0x01 || count == 0)
     {
         uart3_tx((uint8_t *)"No valid data in EEPROM.\r\n");
@@ -167,7 +170,7 @@ void EEPROM_ReadAllMessagesAndErase(void)
 
     char buffer[MAX_MESSAGE_LEN + 1];
 
-    for (uint8_t i = 0; i < count; i++)
+    for (uint8_t i = 0; i <count; i++)
     {
         uint16_t msg_address = i * MAX_MESSAGE_LEN;
         uint16_t page = EEPROM_LOG_START_PAGE + (msg_address / PAGE_SIZE);
@@ -175,10 +178,15 @@ void EEPROM_ReadAllMessagesAndErase(void)
 
         memset(buffer, 0, sizeof(buffer));
         EEPROM_Read(page, offset, (uint8_t *)buffer, MAX_MESSAGE_LEN);
-
-        uart3_tx((uint8_t *)"----- EEPROM DATA -----\r\n");
-        uart3_tx((uint8_t *)buffer);
-        GSM_SendSMS(buffer);
+        if(d.Mode==0)
+        {
+        	GSM_SendSMS(buffer);
+        }
+        if(d.Mode==1)
+        {
+        	GSMInitGsheet();
+        	HTTPInitAndSend(buffer);
+        }
     }
 
     // Erase all used pages including metadata
@@ -191,3 +199,67 @@ void EEPROM_ReadAllMessagesAndErase(void)
 
     uart3_tx((uint8_t *)"EEPROM erased after reading all messages.\r\n");
 }
+
+
+
+void NormalizeToMultilineFormat(const char *input, char *output, size_t outputSize)
+{
+    // Check for "\r\n" to determine if input is already in the correct format
+    if (strstr(input, "\r\n") != NULL) {
+        // Already formatted correctly
+        strncpy(output, input, outputSize - 1);
+        output[outputSize - 1] = '\0';
+        return;
+    }
+
+    // Replace '&' with "\r\n"
+    size_t outIdx = 0;
+    for (size_t i = 0; input[i] != '\0' && outIdx < outputSize - 1; ++i)
+    {
+        if (input[i] == '&')
+        {
+            if (outIdx + 2 < outputSize - 1)
+            {
+                output[outIdx++] = '\r';
+                output[outIdx++] = '\n';
+            }
+            else
+            {
+                break;  // not enough space
+            }
+        }
+        else
+        {
+            output[outIdx++] = input[i];
+        }
+    }
+    output[outIdx] = '\0';
+}
+
+void CSVtoQueryString(const char *input, char *output, size_t outputSize)
+{
+	char inputCopy[512];
+	    strncpy(inputCopy, input, sizeof(inputCopy) - 1);
+	    inputCopy[sizeof(inputCopy) - 1] = '\0';
+
+	    output[0] = '\0';
+
+	    char *line = strtok(inputCopy, "\r\n");
+	    int isFirst = 1;
+
+	    while (line != NULL)
+	    {
+	        if (strlen(line) > 0)
+	        {
+	            if (!isFirst)
+	            {
+	                strncat(output, "&", outputSize - strlen(output) - 1);
+	            }
+	            strncat(output, line, outputSize - strlen(output) - 1);
+	            isFirst = 0;
+	        }
+	        line = strtok(NULL, "\r\n");
+	    }
+}
+
+

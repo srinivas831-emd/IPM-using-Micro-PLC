@@ -133,77 +133,221 @@ void USERRCV_GPIO_Init()
 
 void DataToGSM(struct data *d)
 {
+	char Gsheetdata[200];
 	char fullMessage[200];
 	snprintf(fullMessage, sizeof(fullMessage),
-    "TIME,%02d:%02d:%02d\r\n"
-    "DATE,%02d/%02d/%02d\r\n"
-    "CH1,%s\r\nCH2,%s\r\nCH3,%s\r\nCH4,%s\r\n"
-    "MDS,%s\r\n"
-    "GPIO0,%s\r\nGPIO1,%s\r\nGPIO2,%s\r\nGPIO3,%s\r\n",
+    "TIME=%02d:%02d:%02d\r\n"
+    "DATE=%02d/%02d/%02d\r\n"
+    "CH1=%s\r\nCH2=%s\r\nCH3=%s\r\nCH4=%s\r\n"
+    "MDS=%s\r\n"
+    "GPIO0=%s\r\nGPIO1=%s\r\nGPIO2=%s\r\nGPIO3=%s\r\n",
     d->hour, d->minutes, d->seconds,
     d->dayofmonth, d->month, d->year,
     CH1, CH2, CH3, CH4, MDS,
     d->Status1, d->Status2, d->Status3, d->Status4);
 
+	snprintf(Gsheetdata, sizeof(Gsheetdata),
+	"TIME=%02d:%02d:%02d&DATE=%02d/%02d/%02d&CH1=%s&CH2=%s&CH3=%s&CH4=%s&MDS=%s&"
+	"GPIO0=%s&GPIO1=%s&GPIO2=%s&GPIO3=%s",
+	d->hour, d->minutes, d->seconds,
+	d->dayofmonth, d->month, d->year,
+	CH1, CH2, CH3, CH4, MDS,
+	d->Status1, d->Status2, d->Status3, d->Status4);
+
+	if (d->Mode==1)
+	{
+		DataToGsheet(Gsheetdata);
+	}
+	if (d->Mode==0)
+	{
+		DataToPhone(fullMessage);
+	}
+
+}
+
+
+void DataToPhone(char * Message)
+{
 	  if(GSM_Init())
 	  {
 		  EEPROM_ReadAllMessagesAndErase();
-		  GSM_SendSMS(fullMessage);
+		  GSM_SendSMS(Message);
 		  uart3_tx((uint8_t*)"\r\nSMS SENT SUCCESFULLY\r\n");
 	  }
 
 	  else
 	  {
 
-		  EEPROM_StoreMessage(fullMessage);
-		  uart3_tx((uint8_t*)"\r\nGSM ERROR INITIALIZED BUT DID NOT SEND SMS\r\n");
+		  EEPROM_StoreMessage(Message);
+		  uart3_tx((uint8_t*)"\r\nGSM ERROR DID NOT SEND SMS\r\n");
 		  return;
 	  }
 }
 
+void DataToGsheet(char *Data)
+{
+	if(GSMInitGsheet()&&HTTPInitAndSend(Data))
+	{
+		EEPROM_ReadAllMessagesAndErase();
+		uart3_tx((uint8_t *)"Success");
+	}
+	else
+	{
+		EEPROM_StoreMessage(Data);
+		uart3_tx((uint8_t*)"\r\nGSM ERROR DID NOT SEND DATA TO GSHEET\r\n");
+		return;
+	}
+}
+
+bool GSMInitGsheet()
+{
+    CircularQueue_Init(&rxwifiQueue);  // Clear residual data
+    HAL_Delay(500);
+
+    if (!GSM_SendCommandandSMS("AT\r\n", 1000))
+    {
+        uart3_tx((uint8_t *)"\rATE0 failed\r");
+        return false;
+    }
+
+    HAL_Delay(500);
+    if (!GSM_SendCommandandSMS("AT+CPIN?\r\n", 1000))
+    {
+        uart3_tx((uint8_t *)"\rAT+CPIN? failed\r");
+        return false;
+    }
+
+    HAL_Delay(500);
+    if (!GSM_SendCommandandSMS("AT+CSQ\r\n", 1000))
+    {
+        uart3_tx((uint8_t *)"\rAT+CSQ failed\r");
+        return false;
+    }
+
+    HAL_Delay(500);
+    if (!GSM_SendCommandandSMS("AT+CGREG?\r\n", 1000))
+    {
+        uart3_tx((uint8_t *)"\rAT+CGREG? failed\r");
+        return false;
+    }
+
+    HAL_Delay(500);
+    if (!GSM_SendCommandandSMS("AT+CGDCONT=1,\"IP\",\"airtelgprs.com\"\r\n", 1000))
+    {
+        uart3_tx((uint8_t *)"\rAT+CGDCONT failed\r");
+        return false;
+    }
+
+    HAL_Delay(500);
+    if (!GSM_SendCommandandSMS("AT+CGATT=1\r\n", 1000))
+    {
+        uart3_tx((uint8_t *)"\rAT+CGATT=1 failed\r");
+        return false;
+    }
+
+    HAL_Delay(500);
+    if (!GSM_SendCommandandSMS("AT+CGACT=1,1\r\n", 1000))
+    {
+        uart3_tx((uint8_t *)"\rAT+CGACT=1,1 failed\r");
+        return false;
+    }
+
+    HAL_Delay(5000);  // Wait for PDP to become active
+    return true;
+}
+
+bool HTTPInitAndSend(char *dataToSend)
+{
+    char url_buffer[350] = {0};
+
+    GSM_SendCommandandSMS("AT+HTTPTERM\r\n", 1000);  // Ignore fail
+    HAL_Delay(200);
+
+    if (!GSM_SendCommandandSMS("AT+HTTPINIT\r\n", 1000))
+    {
+        uart3_tx((uint8_t *)"\rAT+HTTPINIT failed\r");
+        return false;
+    }
+
+    HAL_Delay(500);
+
+    // Set URL
+    snprintf(url_buffer, sizeof(url_buffer),
+    "AT+HTTPPARA=\"URL\",\"https://script.google.com/macros/s/AKfycbzX2CX2NH_qEUK3xxXWb4E22FBTYOP-szZ-fblhGSe9peR-hir6QgeF7Z889WJzdeggZg/exec?%s\"\r\n",dataToSend);
+    uart3_tx((uint8_t*)url_buffer);
+    if (!GSM_SendCommandandSMS(url_buffer, 5000))
+    {
+        uart3_tx((uint8_t *)"\rAT+HTTPPARA URL failed\r");
+        GSM_SendCommandandSMS("AT+HTTPTERM\r\n", 1000);  // Always close
+        HAL_Delay(500);
+        return false;
+    }
+
+    HAL_Delay(500);
+
+    GSM_SendCommandandSMS("AT+HTTPPARA=\"CONTENT\",\"application/x-www-form-urlencoded\"\r\n", 1000);
+
+    if (!GSM_SendCommandandSMS("AT+HTTPACTION=0\r\n", 1000))
+    {
+        uart3_tx((uint8_t *)"\rAT+HTTPACTION=0 failed\r");
+        return false;
+    }
+
+    HAL_Delay(10000);
+    GSM_SendCommandandSMS("AT+HTTPREAD\r\n", 2000);  // Read response
+
+
+    GSM_SendCommandandSMS("AT+HTTPTERM\r\n", 1000);  // Always close
+    HAL_Delay(10000);
+
+    return true;
+}
+
 bool GSM_WaitForResponse(uint32_t timeout)
 {
+    uint32_t startTime = HAL_GetTick();
     uint8_t gsmBuffer[GSM_RX_BUFFER_SIZE] = {0};
     uint16_t idx = 0;
     uint8_t ch;
-	while (!CircularQueue_IsEmpty(&rxwifiQueue))
-	{
-    	if (CircularQueue_Dequeue(&rxwifiQueue, &ch))
+
+    while ((HAL_GetTick() - startTime) < timeout)
+    {
+        while (!CircularQueue_IsEmpty(&rxwifiQueue))
         {
-            gsmBuffer[idx++] = ch;
-            gsmBuffer[idx] = '\0';
-
-//            uart3_tx(&ch);  // Optional: debug print
-
-            if (strstr((char *)gsmBuffer, "OK\r\n") ||
-                strstr((char *)gsmBuffer, "+CMGS:") ||
-                strstr((char *)gsmBuffer, "\r\n>"))
+            if (CircularQueue_Dequeue(&rxwifiQueue, &ch))
             {
-                return true;
-            }
-            else if (strstr((char *)gsmBuffer, "ERROR") ||
-                     strstr((char *)gsmBuffer, "FAIL"))
-            {
-                return false;
+                gsmBuffer[idx++] = ch;
+                if (idx >= GSM_RX_BUFFER_SIZE-1) idx = 0; // prevent overflow
+                gsmBuffer[idx] = '\0';
+
+                if (strstr((char *)gsmBuffer, "ERROR") ||
+                    strstr((char *)gsmBuffer, "FAIL"))
+                {
+                    return false;
+                }
+                // Add more success conditions
+                else if (strstr((char *)gsmBuffer, "OK\r\n") ||
+                    strstr((char *)gsmBuffer, "+CMGS:") ||
+                    strstr((char *)gsmBuffer, "\r\n>") ||
+                    strstr((char *)gsmBuffer, "+HTTPACTION:") ||
+                    strstr((char *)gsmBuffer, "+HTTPREAD:"))
+                {
+                    return true;
+                }
             }
         }
-	}
-
+        HAL_Delay(10); // Small delay to prevent busy waiting
+    }
     return false;  // Timeout
 }
 
 bool GSM_SendCommandandSMS(const char *cmd, uint32_t timeout)
-	{
+{
     for (int attempt = 0; attempt < 2; attempt++)
     {
-        d.ExpectingGsmResponse = 1;  // MUST set BEFORE transmission
-
         HAL_UART_Transmit(&huart4, (uint8_t *)cmd, strlen(cmd), HAL_MAX_DELAY);
-        HAL_UART_Receive_IT(&huart4, rxwifiBuffer,1);
+        HAL_UART_Receive_IT(&huart4,&rxwifiBuffer,1);
         bool success = GSM_WaitForResponse(timeout);
-
-        d.ExpectingGsmResponse = 0;
-
         if (success) return true;
 
         if (attempt == 0)
@@ -237,8 +381,6 @@ bool GSM_Init(void)
     	uart3_tx((uint8_t *)"AT+CMGF=1\r");
     	return false;
     }
-
-
     return true;
 }
 
