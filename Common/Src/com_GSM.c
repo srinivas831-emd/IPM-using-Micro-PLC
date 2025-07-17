@@ -210,48 +210,41 @@ bool GSMInitGsheet()
         return false;
     }
 
-    HAL_Delay(500);
     if (!GSM_SendCommandandSMS("AT+CPIN?\r\n", 1000))
     {
         uart3_tx((uint8_t *)"\rAT+CPIN? failed\r");
         return false;
     }
 
-    HAL_Delay(500);
     if (!GSM_SendCommandandSMS("AT+CSQ\r\n", 1000))
     {
         uart3_tx((uint8_t *)"\rAT+CSQ failed\r");
         return false;
     }
 
-    HAL_Delay(500);
     if (!GSM_SendCommandandSMS("AT+CGREG?\r\n", 1000))
     {
         uart3_tx((uint8_t *)"\rAT+CGREG? failed\r");
         return false;
     }
 
-    HAL_Delay(500);
     if (!GSM_SendCommandandSMS("AT+CGDCONT=1,\"IP\",\"airtelgprs.com\"\r\n", 1000))
     {
         uart3_tx((uint8_t *)"\rAT+CGDCONT failed\r");
         return false;
     }
 
-    HAL_Delay(500);
-    if (!GSM_SendCommandandSMS("AT+CGATT=1\r\n", 1000))
+    if (!GSM_SendCommandandSMS("AT+CGATT=1\r\n", 2000))
     {
         uart3_tx((uint8_t *)"\rAT+CGATT=1 failed\r");
         return false;
     }
 
-    HAL_Delay(500);
-    if (!GSM_SendCommandandSMS("AT+CGACT=1,1\r\n", 1000))
+    if (!GSM_SendCommandandSMS("AT+CGACT=1,1\r\n", 2000))
     {
         uart3_tx((uint8_t *)"\rAT+CGACT=1,1 failed\r");
         return false;
     }
-
     HAL_Delay(5000);  // Wait for PDP to become active
     return true;
 }
@@ -261,7 +254,6 @@ bool HTTPInitAndSend(char *dataToSend)
     char url_buffer[350] = {0};
 
     GSM_SendCommandandSMS("AT+HTTPTERM\r\n", 1000);  // Ignore fail
-    HAL_Delay(200);
 
     if (!GSM_SendCommandandSMS("AT+HTTPINIT\r\n", 1000))
     {
@@ -269,36 +261,27 @@ bool HTTPInitAndSend(char *dataToSend)
         return false;
     }
 
-    HAL_Delay(500);
-
     // Set URL
     snprintf(url_buffer, sizeof(url_buffer),
-    "AT+HTTPPARA=\"URL\",\"https://script.google.com/macros/s/AKfycbzX2CX2NH_qEUK3xxXWb4E22FBTYOP-szZ-fblhGSe9peR-hir6QgeF7Z889WJzdeggZg/exec?%s\"\r\n",dataToSend);
+    "AT+HTTPPARA=\"URL\",\"https://script.google.com/macros/s/AKfycbwVHpVGJKW3i31Jn3TBsAHLC4qXemZInumXpq8PhTBYVzO86E0aDSXuLDiifLyr4kxIfA/exec?%s\"\r\n",dataToSend);
     uart3_tx((uint8_t*)url_buffer);
     if (!GSM_SendCommandandSMS(url_buffer, 5000))
     {
-        uart3_tx((uint8_t *)"\rAT+HTTPPARA URL failed\r");
-        GSM_SendCommandandSMS("AT+HTTPTERM\r\n", 1000);  // Always close
-        HAL_Delay(500);
         return false;
     }
 
-    HAL_Delay(500);
-
     GSM_SendCommandandSMS("AT+HTTPPARA=\"CONTENT\",\"application/x-www-form-urlencoded\"\r\n", 1000);
 
-    if (!GSM_SendCommandandSMS("AT+HTTPACTION=0\r\n", 1000))
+    if (!GSM_SendCommandandSMS("AT+HTTPACTION=0\r\n", 10000))
     {
         uart3_tx((uint8_t *)"\rAT+HTTPACTION=0 failed\r");
         return false;
     }
 
-    HAL_Delay(10000);
     GSM_SendCommandandSMS("AT+HTTPREAD\r\n", 2000);  // Read response
 
-
     GSM_SendCommandandSMS("AT+HTTPTERM\r\n", 1000);  // Always close
-    HAL_Delay(10000);
+    HAL_Delay(1000);
 
     return true;
 }
@@ -321,7 +304,12 @@ bool GSM_WaitForResponse(uint32_t timeout)
                 gsmBuffer[idx] = '\0';
 
                 if (strstr((char *)gsmBuffer, "ERROR") ||
-                    strstr((char *)gsmBuffer, "FAIL"))
+                    strstr((char *)gsmBuffer, "FAIL")||
+                    strstr((char *)gsmBuffer, "+CSQ: 99,99")||
+                    strstr((char *)gsmBuffer, "+CGREG: 0,2")||
+                    strstr((char *)gsmBuffer, "+CGREG: 0,3")||
+                    strstr((char *)gsmBuffer, "+CGREG: 0,0")||
+                    strstr((char *)gsmBuffer, "+CGREG: 0,4"))
                 {
                     return false;
                 }
@@ -369,13 +357,11 @@ bool GSM_Init(void)
     	uart3_tx((uint8_t *)"\rATE0 failed\r");
     	return false;
     }
-    HAL_Delay(1000);
     if (!GSM_SendCommandandSMS("AT\r\n", 1000))
     {
     	uart3_tx((uint8_t *)"\rAT failed\r");
     	return false;
     }
-    HAL_Delay(1000);
     if (!GSM_SendCommandandSMS("AT+CMGF=1\r\n", 1000))
     {
     	uart3_tx((uint8_t *)"AT+CMGF=1\r");
@@ -384,11 +370,10 @@ bool GSM_Init(void)
     return true;
 }
 
-
 void GSM_SendSMS(char *a)
 {
 	char cmd[64];
-	sprintf(cmd, "AT+CMGS=\"+918317370381\"\r");
+	sprintf(cmd, "AT+CMGS=\"%s\"\r",d.PhoneNumber);
 
 	// Phase 1: Send recipient number
 	GSM_SendCommandandSMS(cmd, 2000);
@@ -409,7 +394,7 @@ void GSM_SendSMS(char *a)
 
 void DataToWiFi(struct data *d)
 {
-	sprintf((char*)WiFi_cloud_data,"TIME,%02d:%02d:%02d;DATE,%02d/%02d/%02d;CH1,%s;CH2,%s;CH3,%s;CH4,%s;MDS,%s;GPIO0,%s;GPIO1,%s;GPIO2,%s;GPIO3,%s\r\n",d->hour,d->minutes,d->seconds,d->dayofmonth,d->month,d->year,CH1,CH2,CH3,CH4,MDS,d->Status1,d->Status2,d->Status3,d->Status4);
+	sprintf((char*)WiFi_cloud_data,"TIME,%02d:%02d:%02d;DATE,%02d/%02d/%02d;CH1,%s;CH2,%s;CH3,%s;CH4,%s;MDS,%s;GPIO0,%s;GPIO1,%s;GPIO2,%s;GPIO3,%s;\r\n",d->hour,d->minutes,d->seconds,d->dayofmonth,d->month,d->year,CH1,CH2,CH3,CH4,MDS,d->Status1,d->Status2,d->Status3,d->Status4);
 	HAL_UART_Transmit(&huart4, WiFi_cloud_data, strlen((char*)WiFi_cloud_data), HAL_MAX_DELAY);
 	HAL_Delay(5);
 }
@@ -511,25 +496,25 @@ void extract_cloud_data(char* WifiData)
 
 void cloud_set_output(struct data *d)
 {
-	if(d->config[0] == 0)
-	{
-		d->GPIO[0] = write_gpio(GPIOB,GPIO_PIN_2, PIN_SET);
-	}
+		if(d->config[0] == 1)
+		{
+			d->GPIO[0] = write_gpio(GPIOB,GPIO_PIN_2, PIN_SET);
+		}
 
-	if(d->config[1] == 0)
-	{
-		d->GPIO[1] = write_gpio(GPIOC,GPIO_PIN_1, PIN_SET);
-	}
+		if(d->config[1] == 1)
+		{
+			d->GPIO[1] = write_gpio(GPIOC,GPIO_PIN_1, PIN_SET);
+		}
 
-	if(d->config[2] == 0)
-	{
-		d->GPIO[2] = write_gpio(GPIOB,GPIO_PIN_4, PIN_SET);
-	}
+		if(d->config[2] == 1)
+		{
+			d->GPIO[2] = write_gpio(GPIOB,GPIO_PIN_4, PIN_SET);
+		}
 
-	if(d->config[3] == 0)
-	{
-		d->GPIO[3] = write_gpio(GPIOB,GPIO_PIN_5, PIN_SET);
-	}
+		if(d->config[3] == 1)
+		{
+			d->GPIO[3] = write_gpio(GPIOB,GPIO_PIN_5, PIN_SET);
+		}
 	//	HAL_UART_Transmit(&huart2, (uint8_t *)d.GPIO, 4,1000);
 }
 
@@ -558,22 +543,22 @@ void cloud_reset_output(struct data *d1)
 
 void cloud_read_pinstatus(struct data *d2)
 {
-	if(d2->config[0]==1)
-	{
-		d2->GPIO[0]=read_gpio( GPIOB,GPIO_PIN_2);
-	}
-	if(d2->config[1]==1)
-	{
-		d2->GPIO[1]=read_gpio(GPIOC,GPIO_PIN_1);
-	}
-	if(d2->config[2]==1)
-	{
-		d2->GPIO[2]=read_gpio( GPIOB,GPIO_PIN_4);
-	}
-	if(d2->config[3]==1)
-	{
-		d2->GPIO[3]=read_gpio( GPIOB,GPIO_PIN_5);
-	}
+		if(d2->config[0]==3)
+		{
+			d2->GPIO[0]=read_gpio( GPIOB,GPIO_PIN_2);
+		}
+		if(d2->config[1]==3)
+		{
+			d2->GPIO[1]=read_gpio(GPIOC,GPIO_PIN_1);
+		}
+		if(d2->config[2]==3)
+		{
+			d2->GPIO[2]=read_gpio( GPIOB,GPIO_PIN_4);
+		}
+		if(d2->config[3]==3)
+		{
+			d2->GPIO[3]=read_gpio( GPIOB,GPIO_PIN_5);
+		}
 }
 
 
@@ -622,6 +607,19 @@ void Process_GPIO_Status()
 		{
 			wifiswitch_val=9;
 		}
+		else if(strcmp(wifiarr1,"PHNO")==0)
+		{
+			wifiswitch_val=10;
+		}
+		else if (strcmp(wifiarr1,"MODE")==0)
+		{
+			wifiswitch_val=11;
+		}
+		else if (strcmp(wifiarr1,"THRESHOLD")==0)
+		{
+			wifiswitch_val=11;
+		}
+
 
 	switch(wifiswitch_val)
 		{
@@ -631,7 +629,7 @@ void Process_GPIO_Status()
 			if(strcmp(wifiarr2,"HIGH")==0)
 			{
 				user_GPIO_Init(GPIOB,GPIO_PIN_2,OUTPUT);
-				d.config[0] = 0;
+				d.config[0] = 1;
 			}
 
 			else if(strcmp(wifiarr2,"LOW")==0)
@@ -643,7 +641,7 @@ void Process_GPIO_Status()
 			else if(strcmp(wifiarr2,"INPUT")==0)
 			{
 					user_GPIO_Init(GPIOB,GPIO_PIN_2,INPUT);
-					d.config[0] = 1;
+					d.config[0] = 3;
 			}
 			break;
 
@@ -652,7 +650,7 @@ void Process_GPIO_Status()
 			if(strcmp(wifiarr2,"HIGH")==0)
 			{
 				user_GPIO_Init(GPIOC,GPIO_PIN_1,OUTPUT);
-				d.config[1]=0;
+				d.config[1]=1;
 			}
 
 			else if(strcmp(wifiarr2,"LOW")==0)
@@ -664,7 +662,7 @@ void Process_GPIO_Status()
 			else if(strcmp(wifiarr2,"INPUT")==0)
 			{
 				user_GPIO_Init(GPIOC,GPIO_PIN_1,INPUT);
-				d.config[1]=1;
+				d.config[1]=3;
 			}
 			break;
 
@@ -674,7 +672,7 @@ void Process_GPIO_Status()
 			if(strcmp(wifiarr2,"HIGH")==0)
 			{
 				user_GPIO_Init(GPIOB,GPIO_PIN_4,OUTPUT);
-				d.config[2]=0;
+				d.config[2]=1;
 			}
 			else if(strcmp(wifiarr2,"LOW")==0)
 			{
@@ -685,7 +683,7 @@ void Process_GPIO_Status()
 			else if(strcmp(wifiarr2,"INPUT")==0)
 			{
 				user_GPIO_Init(GPIOB,GPIO_PIN_4,INPUT);
-				d.config[2]=1;
+				d.config[2]=3;
 			}
 
 			break;
@@ -695,7 +693,7 @@ void Process_GPIO_Status()
 			if(strcmp(wifiarr2,"HIGH")==0)
 			{
 				user_GPIO_Init(GPIOB,GPIO_PIN_5,OUTPUT);
-				d.config[3]=0;
+				d.config[3]=1;
 			}
 			else if(strcmp(wifiarr2,"LOW")==0)
 			{
@@ -705,7 +703,7 @@ void Process_GPIO_Status()
 			else if(strcmp(wifiarr2,"INPUT")==0)
 			{
 				user_GPIO_Init(GPIOB,GPIO_PIN_5,INPUT);
-				d.config[3]=1;
+				d.config[3]=3;
 			}
 			break;
 
@@ -818,15 +816,30 @@ void Process_GPIO_Status()
 			{
 				d.year = atoi(wifitoken);
 			}
-			//				 Set_Time(time);
 
 			set_date(1,d.dayofmonth,d.month,d.year);
 			break;
 
 
-		case 9:
+			case 9:
 			d.scan_time = atoi(wifiarr2);
+			break;
+			case 10:
+			strncpy(d.PhoneNumber,wifiarr2,strlen(wifiarr2));
+			break;
+			case 11:
+			if(strcmp(wifiarr2,"SMS")==0)
+			{
+				d.Mode=0;
+			}
+
+			else if(strcmp(wifiarr2,"GSHEET")==0)
+			{
+				d.Mode=1;
+			}
+				break;
+			case 12:
+			d.threshold = atof(wifiarr2);
 			break;
 		}
 }
-
