@@ -11,17 +11,7 @@
 
 struct data
 {
-	char seconds;
-	char minutes;
-	char hour;
-	char dayofweek;
-	char dayofmonth;
-	char month;
-	char year;
-	char arr1[10];
-	char arr2[20];
-	char wifiarr1[10];
-	char wifiarr2[20];
+	float threshold;
 	float adc1_value;
 	float adc2_value;
 	float adc3_value;
@@ -29,8 +19,8 @@ struct data
 	float MDS_value;
 	uint8_t GPIO[4];
 	uint8_t scan_time;
-	char config[4];
 	uint8_t adcChnlChecker[4];
+	char config[4];
 	char Status1[10];
 	char Status2[10];
 	char Status3[10];
@@ -42,9 +32,20 @@ struct data
 	char online;
 	char WiFi;
 	char GSM;
-	char PhoneNumber[15];
+	char PhoneNumber[20];
 	char ExpectingGsmResponse;
 	char Mode;
+	char seconds;
+	char minutes;
+	char hour;
+	char dayofweek;
+	char dayofmonth;
+	char month;
+	char year;
+	char arr1[10];
+	char arr2[20];
+	char wifiarr1[10];
+	char wifiarr2[20];
 };
 
 extern struct data d;

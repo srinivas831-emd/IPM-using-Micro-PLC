@@ -89,9 +89,15 @@ void ADC_handler(struct data *d)
 	{
 		ADC_select_CH4();
 	}
-
-	d->MDS_value=(d->adc1_value*d->adc2_value)/d->adc3_value;
-			if(d->MDS_value>=1.5)
+			if(d->adc1_value==0||d->adc2_value==0||d->adc3_value==0)
+			{
+				d->MDS_value = 0.0000;
+			}
+			else
+			{
+			d->MDS_value=(d->adc1_value*d->adc2_value)/d->adc3_value;
+			}
+			if(d->MDS_value>=d->threshold)
 			{
 	    		d->MDS_PIN = write_gpio(GPIOB,GPIO_PIN_12, PIN_SET);
 	    		HAL_Delay(1000);
@@ -100,7 +106,6 @@ void ADC_handler(struct data *d)
 	    	{
 	    		d->MDS_PIN = write_gpio(GPIOB,GPIO_PIN_12, PIN_RESET);
 	    		HAL_Delay(1000);
-
 	    	}
 
 

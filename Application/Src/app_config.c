@@ -292,6 +292,11 @@ void pin_config()
 	{
 		switch_val=14;
 	}
+	else if (strcmp(arr1,"THRESHOLD")==0)
+	{
+		switch_val=15;
+	}
+
 
 
 	switch(switch_val)
@@ -509,7 +514,7 @@ void pin_config()
 		strcpy(d.eeprom_data,arr2);
 		break;
 	case 13:
-		strcpy(d.PhoneNumber,arr2);
+		strncpy(d.PhoneNumber,arr2,strlen(arr2));
 		break;
 	case 14:
 		if(strcmp(arr2,"SMS")==0)
@@ -521,8 +526,10 @@ void pin_config()
 		{
 			d.Mode=1;
 		}
-
-
+		break;
+	case 15:
+		d.threshold = atof(arr2);
+		break;
 	}
 }
 

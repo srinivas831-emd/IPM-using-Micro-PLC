@@ -34,6 +34,5 @@ void application(void)
 	get_time(&d);			//GET THE TIME FROM RTC
     ADC_handler(&d);		//ADC INITIALIZATION OR DESABLING
     DataToCloud(&d);		//UPLOAD DATA TO GOOGLE SHEET OR MOBLIE
-
-    //terminal(&d);
+    //terminal(&d); 			//DEBUGGING
 }

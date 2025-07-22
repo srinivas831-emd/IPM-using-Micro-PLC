@@ -81,7 +81,7 @@ void EEPROM_Write (uint16_t page, uint16_t offset, uint8_t *data, uint16_t size)
 		offset=0;
 		size = size-bytesremaining;
 		pos += bytesremaining;
-		HAL_Delay (50);
+		HAL_Delay (5);
 	}
 }
 
@@ -109,7 +109,7 @@ void EEPROM_Read (uint16_t page, uint16_t offset, uint8_t *data, uint16_t size)
 		offset=0;
 		size = size-bytesremaining;
 		pos += bytesremaining;
-		HAL_Delay(50);
+		HAL_Delay(5);
 	}
 }
 
@@ -120,11 +120,11 @@ void EEPROM_PageErase (uint16_t page)
 	uint8_t data[PAGE_SIZE];
 	memset(data,0x00,PAGE_SIZE);
 	HAL_I2C_Mem_Write(EEPROM_I2C, EEPROM_ADDR, MemAddress, 2, data, PAGE_SIZE, 1000);
-	HAL_Delay (50);
+	HAL_Delay (5);
 }
 
 void EEPROM_StoreMessage(char *message)
-	{
+{
 		uint8_t flag = 0x01;
 	    uint8_t count = 0;
 
@@ -157,6 +157,7 @@ void EEPROM_ReadAllMessagesAndErase(void)
 {
     uint8_t flag = 0;
     uint8_t count = 0;
+    bool allUploaded = true;
 
     EEPROM_Read(EEPROM_FLAG_PAGE, EEPROM_FLAG_OFFSET, &flag, 1);
     EEPROM_Read(EEPROM_FLAG_PAGE, EEPROM_COUNT_OFFSET, &count, 1);
@@ -168,7 +169,7 @@ void EEPROM_ReadAllMessagesAndErase(void)
         return;
     }
 
-    char buffer[MAX_MESSAGE_LEN + 1];
+    char buffer[MAX_MESSAGE_LEN + 1]={0};
 
     for (uint8_t i = 0; i <count; i++)
     {
@@ -178,18 +179,25 @@ void EEPROM_ReadAllMessagesAndErase(void)
 
         memset(buffer, 0, sizeof(buffer));
         EEPROM_Read(page, offset, (uint8_t *)buffer, MAX_MESSAGE_LEN);
+        if (buffer[0] != '\0')
+        {
         if(d.Mode==0)
         {
         	GSM_SendSMS(buffer);
         }
         if(d.Mode==1)
         {
-        	GSMInitGsheet();
-        	HTTPInitAndSend(buffer);
+        	if(!GSMInitGsheet()||!HTTPInitAndSend(buffer))
+        	{
+        		allUploaded=false;
+        	}
+
+        }
         }
     }
-
     // Erase all used pages including metadata
+    if(d.Mode==0||allUploaded==true)
+    {
     EEPROM_PageErase(EEPROM_FLAG_PAGE);
     uint8_t total_pages = ((count * MAX_MESSAGE_LEN) / PAGE_SIZE) + 1;
     for (uint8_t i = 0; i < total_pages; i++)
@@ -198,9 +206,12 @@ void EEPROM_ReadAllMessagesAndErase(void)
     }
 
     uart3_tx((uint8_t *)"EEPROM erased after reading all messages.\r\n");
+    }
+    else
+	{
+		uart3_tx((uint8_t *)"Some messages failed to upload. EEPROM not erased.\r\n");
+	}
 }
-
-
 
 void NormalizeToMultilineFormat(const char *input, char *output, size_t outputSize)
 {

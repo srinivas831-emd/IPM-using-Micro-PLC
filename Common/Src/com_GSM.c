@@ -25,6 +25,7 @@
 #include"EEPROM.h"
 #define GSM_RX_BUFFER_SIZE 512
 
+char smsBody[64];
 extern char CH1[10];
 extern char CH2[10];
 extern char CH3[10];
@@ -36,10 +37,11 @@ uint8_t GSM_cloud_data[256];
 //CircularQueue wifirxQueue;
 char *wifitoken;
 
-static char WifiData[1000];
 uint8_t rxwifiBuffer;
 CircularQueue rxwifiQueue;
 CircularQueue GSMQueue;
+static char WifiData[1000];
+
 char wifiarr1[10]   ;
 char wifiarr2[10]   ;
 int wifiswitch_val=0;
@@ -47,7 +49,10 @@ char wificonfig[4]={4,4,4,4};
 uint8_t wifiadcChnlChecker[4];
 extern struct data d;
 extern uint8_t ch;
+#define ALL_DATA_BUFFER_SIZE 1024
 
+char allDataBuffer[ALL_DATA_BUFFER_SIZE];
+static uint16_t allDataIndex = 0;
 extern UART_HandleTypeDef huart1;
 extern UART_HandleTypeDef huart3;
 
@@ -201,8 +206,6 @@ void DataToGsheet(char *Data)
 
 bool GSMInitGsheet()
 {
-    CircularQueue_Init(&rxwifiQueue);  // Clear residual data
-    HAL_Delay(500);
 
     if (!GSM_SendCommandandSMS("AT\r\n", 1000))
     {
@@ -263,7 +266,7 @@ bool HTTPInitAndSend(char *dataToSend)
 
     // Set URL
     snprintf(url_buffer, sizeof(url_buffer),
-    "AT+HTTPPARA=\"URL\",\"https://script.google.com/macros/s/AKfycbwVHpVGJKW3i31Jn3TBsAHLC4qXemZInumXpq8PhTBYVzO86E0aDSXuLDiifLyr4kxIfA/exec?%s\"\r\n",dataToSend);
+    "AT+HTTPPARA=\"URL\",\"https://script.google.com/macros/s/AKfycbxB0z9f02ZI33mE-tcD5cWHuz50fhhXr3fjb0sssR3Cv01QXV-QjESBZpegjNcUCHuLmA/exec?%s\"\r\n",dataToSend);
     uart3_tx((uint8_t*)url_buffer);
     if (!GSM_SendCommandandSMS(url_buffer, 5000))
     {
@@ -272,7 +275,7 @@ bool HTTPInitAndSend(char *dataToSend)
 
     GSM_SendCommandandSMS("AT+HTTPPARA=\"CONTENT\",\"application/x-www-form-urlencoded\"\r\n", 1000);
 
-    if (!GSM_SendCommandandSMS("AT+HTTPACTION=0\r\n", 10000))
+    if (!GSM_SendCommandandSMS("AT+HTTPACTION=0\r\n", 15000))
     {
         uart3_tx((uint8_t *)"\rAT+HTTPACTION=0 failed\r");
         return false;
@@ -283,6 +286,7 @@ bool HTTPInitAndSend(char *dataToSend)
     GSM_SendCommandandSMS("AT+HTTPTERM\r\n", 1000);  // Always close
     HAL_Delay(1000);
 
+	CircularQueue_Init(&rxwifiQueue);
     return true;
 }
 
@@ -349,9 +353,6 @@ bool GSM_SendCommandandSMS(const char *cmd, uint32_t timeout)
 
 bool GSM_Init(void)
 {
-    CircularQueue_Init(&rxwifiQueue);  // Clear residual data
-
-
     if (!GSM_SendCommandandSMS("ATE0\r\n", 1000))
     {
     	uart3_tx((uint8_t *)"\rATE0 failed\r");
@@ -367,6 +368,11 @@ bool GSM_Init(void)
     	uart3_tx((uint8_t *)"AT+CMGF=1\r");
     	return false;
     }
+    if(!GSM_SendCommandandSMS("AT+CNMI=2,2,0,0,0\r\n",500))
+    {
+    	uart3_tx((uint8_t *)"AT+CNMI=2,2,0,0,0\r");
+    	return false;
+    }
     return true;
 }
 
@@ -380,13 +386,12 @@ void GSM_SendSMS(char *a)
 
 	uart3_tx((uint8_t *)a);
 	// Critical: Set response routing BEFORE transmission
-	CircularQueue_Init(&rxwifiQueue);
 
 	HAL_UART_Transmit(&huart4, (uint8_t*)a, strlen(a), HAL_MAX_DELAY);
 	uint8_t ctrlZ = 0x1A;
 	HAL_UART_Transmit(&huart4, &ctrlZ, 1, HAL_MAX_DELAY);
-	CircularQueue_Init(&rxwifiQueue);  // Clear residual data
 	// Optional memory cleanup (remove if causing issues)
+	CircularQueue_Init(&rxwifiQueue);
 	GSM_SendCommandandSMS("AT+CMGD=1,4\r", 2000);
 }
 
@@ -419,80 +424,131 @@ void cloud_data_receive()
 
 void cloud_Process_Commands(void)
 {
-	static uint8_t cmdIndex = 0;  // Persistent index to track the current command
-	uint8_t byte;
-
-	while (!CircularQueue_IsEmpty(&rxwifiQueue))
+	if(d.GSM==1&&d.WiFi==0)
 	{
-		CircularQueue_Dequeue(&rxwifiQueue, &byte);
-
-//		HAL_UART_Transmit(&huart1, &byte, 1, HAL_MAX_DELAY); // For debugging
-		if(cmdIndex == 0)
-		{
-			memset(WifiData, 0, sizeof(WifiData));
-		}
-
-		// Add byte to the command
-		if (byte != ';')
-		{
-			if (cmdIndex < sizeof(WifiData) - 1)
-			{
-
-				WifiData[cmdIndex++] = byte;
-			}
-
-			else
-
-			{
-				// Handle command overflow (optional)
-				cmdIndex = 0;  // Reset on overflow
-			}
-		}
-
-		else
-
-		{
-			// Command completed when '\n' is received
-			WifiData[cmdIndex] = '\0';  // Null-terminate the command
-			cmdIndex = 0;
-			extract_cloud_data(WifiData);
-			Process_GPIO_Status();
-		}
-
+		GSM_ProcessIncomingSMS();
+	}
+	else if(d.GSM==0&&d.WiFi==1)
+	{
+		WiFi_ProcessIncomingSMS();
 	}
 }
 
 
-
-
-
-void extract_cloud_data(char* WifiData)
+void WiFi_ProcessIncomingSMS(void)
 {
-	wifitoken = strtok(WifiData, ",");
+	static uint8_t cmdIndex = 0;  // Persistent index to track the current command
+			uint8_t byte;
+			while (!CircularQueue_IsEmpty(&rxwifiQueue))
+			{
+				CircularQueue_Dequeue(&rxwifiQueue, &byte);
 
+		//		HAL_UART_Transmit(&huart1, &byte, 1, HAL_MAX_DELAY); // For debugging
+				if(cmdIndex == 0)
+				{
+					memset(WifiData, 0, sizeof(WifiData));
+				}
 
-	if (wifitoken != NULL)
-	{
-		strncpy(wifiarr1, wifitoken, sizeof(wifiarr1) - 1);
+				// Add byte to the command
+				if (byte != ';')
+				{
+					if (cmdIndex < sizeof(WifiData) - 1)
+					{
 
-		wifiarr1[sizeof(wifiarr1) - 1] = '\0';// Ensure null-termination
-		strcpy(d.wifiarr1,wifiarr1);
+						WifiData[cmdIndex++] = byte;
+					}
 
+					else
 
-		wifitoken = strtok(NULL, ",");
-	}
+					{
+						// Handle command overflow (optional)
+						cmdIndex = 0;  // Reset on overflow
+					}
+				}
 
-	// Get the second token and store it in arr2
-	if (wifitoken != NULL)
-	{
-		strncpy(wifiarr2, wifitoken, sizeof(wifiarr2) - 1);
+				else
 
-		wifiarr2[sizeof(wifiarr2) - 1] = '\0'; // Ensure null-termination
-		strcpy(d.wifiarr2,wifiarr2);
+				{
+					// Command completed when '\n' is received
+					WifiData[cmdIndex] = '\0';  // Null-terminate the command
+					cmdIndex = 0;
+					extract_data(WifiData);
+					pin_config();
+				}
 
-		//token = strtok(NULL, ",");
-	}
+			}
 }
+
+
+void GSM_ProcessIncomingSMS(void)
+{
+	 uint8_t byte;
+
+	    while (!CircularQueue_IsEmpty(&rxwifiQueue))
+	    {
+	        CircularQueue_Dequeue(&rxwifiQueue, &byte);
+
+	        // Add byte to buffer (if space)
+	        if (allDataIndex < ALL_DATA_BUFFER_SIZE - 1)
+	        {
+	            allDataBuffer[allDataIndex++] = byte;
+	            allDataBuffer[allDataIndex] = '\0'; // Null-terminate
+	        }
+	        else
+	        {
+	            // Buffer full — optional: reset or overwrite
+	            allDataIndex = 0;
+	            memset(allDataBuffer, 0, sizeof(allDataBuffer));
+	        }
+	    }
+	    //uart3_tx(allDataBuffer);
+	    //uart3_tx(allDataBuffer);
+	    extractSMS(allDataBuffer);
+	    allDataIndex = 0;
+	    memset(allDataBuffer, 0, sizeof(allDataBuffer));
+}
+
+
+
+
+void extractSMS(char *a)
+{
+    int i = 0;
+    int j = 0;
+    char c[100] = {0};
+
+    while (a[i] != '\0')
+    {
+        // Skip until '='
+        while (a[i] != '\0' && a[i] != '=')
+        {
+            i++;
+        }
+
+        if (a[i] == '=')
+        {
+            i++;  // Skip '='
+        }
+
+        j = 0; // Reset index for c[]
+
+        while (a[i] != '\0' && a[i] != ';')
+        {
+            c[j++] = a[i++];
+        }
+
+        c[j] = '\0'; // Ensure null termination
+
+        if (j > 0)
+        {
+        	extract_data(c);
+        	pin_config();
+        }
+
+        if (a[i] == ';') i++; // Skip ';'
+    }
+}
+
 
 void cloud_set_output(struct data *d)
 {
@@ -562,284 +618,3 @@ void cloud_read_pinstatus(struct data *d2)
 }
 
 
-void Process_GPIO_Status()
-{
-		if(strcmp(wifiarr1,"B2")||strcmp(wifiarr1,"GPIO0")==0)
-		{
-			wifiswitch_val=1;
-		}
-
-		else if(strcmp(wifiarr1,"C1")||strcmp(wifiarr1,"GPIO1")==0)
-		{
-			wifiswitch_val=2;
-		}
-
-		else if(strcmp(wifiarr1,"B4")||strcmp(wifiarr1,"GPIO2")==0)
-		{
-			wifiswitch_val=3;
-		}
-
-		else if(strcmp(wifiarr1,"B5")||strcmp(wifiarr1,"GPIO3")==0)
-		{
-			wifiswitch_val=4;
-		}
-
-		else if(strcmp(wifiarr1,"ADC1")==0)
-		{
-			wifiswitch_val=5;
-		}
-		else if(strcmp(wifiarr1,"DISABLE")==0)
-		{
-			wifiswitch_val=6;
-		}
-
-		else if(strcmp(wifiarr1,"TIME")==0)
-		{
-			wifiswitch_val=7;
-		}
-
-		else if(strcmp(wifiarr1,"DATE")==0)
-		{
-			wifiswitch_val=8;
-		}
-
-		else if(strcmp(wifiarr1,"SCANTIME")==0)
-		{
-			wifiswitch_val=9;
-		}
-		else if(strcmp(wifiarr1,"PHNO")==0)
-		{
-			wifiswitch_val=10;
-		}
-		else if (strcmp(wifiarr1,"MODE")==0)
-		{
-			wifiswitch_val=11;
-		}
-		else if (strcmp(wifiarr1,"THRESHOLD")==0)
-		{
-			wifiswitch_val=11;
-		}
-
-
-	switch(wifiswitch_val)
-		{
-
-	//PB2
-		case 1:
-			if(strcmp(wifiarr2,"HIGH")==0)
-			{
-				user_GPIO_Init(GPIOB,GPIO_PIN_2,OUTPUT);
-				d.config[0] = 1;
-			}
-
-			else if(strcmp(wifiarr2,"LOW")==0)
-			{
-					user_GPIO_Init(GPIOB,GPIO_PIN_2,OUTPUT);
-					d.config[0] = 2;
-			}
-
-			else if(strcmp(wifiarr2,"INPUT")==0)
-			{
-					user_GPIO_Init(GPIOB,GPIO_PIN_2,INPUT);
-					d.config[0] = 3;
-			}
-			break;
-
-	//PC1
-		case 2:
-			if(strcmp(wifiarr2,"HIGH")==0)
-			{
-				user_GPIO_Init(GPIOC,GPIO_PIN_1,OUTPUT);
-				d.config[1]=1;
-			}
-
-			else if(strcmp(wifiarr2,"LOW")==0)
-			{
-				user_GPIO_Init(GPIOC,GPIO_PIN_1,OUTPUT);
-				d.config[1]=2;
-			}
-
-			else if(strcmp(wifiarr2,"INPUT")==0)
-			{
-				user_GPIO_Init(GPIOC,GPIO_PIN_1,INPUT);
-				d.config[1]=3;
-			}
-			break;
-
-
-	//PB4
-		case 3:
-			if(strcmp(wifiarr2,"HIGH")==0)
-			{
-				user_GPIO_Init(GPIOB,GPIO_PIN_4,OUTPUT);
-				d.config[2]=1;
-			}
-			else if(strcmp(wifiarr2,"LOW")==0)
-			{
-				user_GPIO_Init(GPIOB,GPIO_PIN_4,OUTPUT);
-				d.config[2]=2;
-			}
-
-			else if(strcmp(wifiarr2,"INPUT")==0)
-			{
-				user_GPIO_Init(GPIOB,GPIO_PIN_4,INPUT);
-				d.config[2]=3;
-			}
-
-			break;
-
-	//PB5
-		case 4:
-			if(strcmp(wifiarr2,"HIGH")==0)
-			{
-				user_GPIO_Init(GPIOB,GPIO_PIN_5,OUTPUT);
-				d.config[3]=1;
-			}
-			else if(strcmp(wifiarr2,"LOW")==0)
-			{
-				user_GPIO_Init(GPIOB,GPIO_PIN_5,OUTPUT);
-				d.config[3]=2;
-			}
-			else if(strcmp(wifiarr2,"INPUT")==0)
-			{
-				user_GPIO_Init(GPIOB,GPIO_PIN_5,INPUT);
-				d.config[3]=3;
-			}
-			break;
-
-
-		case 5:
-			if(strcmp(wifiarr2,"CH1")==0)
-			{
-				ADC_select_CH1();
-				d.adcChnlChecker[0] = 1;
-			}
-
-			else if(strcmp(wifiarr2,"CH2")==0)
-			{
-				ADC_select_CH2();
-				d.adcChnlChecker[1] = 1;
-			}
-
-			else if(strcmp(wifiarr2,"CH3")==0)
-			{
-				ADC_select_CH3();
-				d.adcChnlChecker[2] = 1;
-			}
-
-			else if(strcmp(wifiarr2,"CH4")==0)
-			{
-				ADC_select_CH4();
-				d.adcChnlChecker[3] = 1;
-			}
-
-			break;
-
-		case 6:
-			if(strcmp(wifiarr2,"CH1")==0)
-			{
-				ADC_select_CH1();
-				d.adcChnlChecker[0] = 0;
-			}
-
-			else if(strcmp(wifiarr2,"CH2")==0)
-			{
-				ADC_select_CH2();
-				d.adcChnlChecker[1] = 0;
-			}
-
-			else if(strcmp(wifiarr2,"CH3")==0)
-			{
-				ADC_select_CH3();
-				d.adcChnlChecker[2] = 0;
-			}
-
-			else if(strcmp(wifiarr2,"CH4")==0)
-			{
-				ADC_select_CH4();
-				d.adcChnlChecker[3] = 0;
-			}
-
-			break;
-
-		case 7:
-
-			wifitoken = strtok(wifiarr2, ":");
-
-			// Get the first token and convert to integer
-			if (wifitoken != NULL)
-			{
-				d.hour = atoi(wifitoken);
-				wifitoken = strtok(NULL, ":");
-
-			}
-
-			// Get the second token and convert to integer
-			if (wifitoken != NULL)
-			{
-				d.minutes = atoi(wifitoken);
-				wifitoken = strtok(NULL, ":");
-
-			}
-
-			// Get the third token and convert to integer
-			if (wifitoken != NULL)
-			{
-				d.seconds = atoi(wifitoken);
-			}
-			//				 Set_Time(time);
-
-			set_time(d.seconds,d.minutes,d.hour);
-
-			break;
-
-		case 8:
-
-			wifitoken = strtok(wifiarr2, ":");
-
-			// Get the first token and convert to integer
-			if (wifitoken != NULL)
-			{
-				d.dayofmonth = atoi(wifitoken);
-				wifitoken = strtok(NULL, ":");
-			}
-
-			// Get the second token and convert to integer
-			if (wifitoken != NULL)
-			{
-				d.month = atoi(wifitoken);
-				wifitoken = strtok(NULL, ":");
-			}
-
-			// Get the third token and convert to integer
-			if (wifitoken != NULL)
-			{
-				d.year = atoi(wifitoken);
-			}
-
-			set_date(1,d.dayofmonth,d.month,d.year);
-			break;
-
-
-			case 9:
-			d.scan_time = atoi(wifiarr2);
-			break;
-			case 10:
-			strncpy(d.PhoneNumber,wifiarr2,strlen(wifiarr2));
-			break;
-			case 11:
-			if(strcmp(wifiarr2,"SMS")==0)
-			{
-				d.Mode=0;
-			}
-
-			else if(strcmp(wifiarr2,"GSHEET")==0)
-			{
-				d.Mode=1;
-			}
-				break;
-			case 12:
-			d.threshold = atof(wifiarr2);
-			break;
-		}
-}
