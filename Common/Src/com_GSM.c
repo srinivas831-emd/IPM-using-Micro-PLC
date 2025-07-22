@@ -515,7 +515,7 @@ void extractSMS(char *a)
 {
     int i = 0;
     int j = 0;
-    char c[100] = {0};
+    char c[200] = {0};
 
     while (a[i] != '\0')
     {
