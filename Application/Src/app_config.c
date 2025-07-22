@@ -233,8 +233,17 @@ void pin_config()
 	{
 		switch_val=1;
 	}
+	else if(strcmp(arr1,"GPIO0")==0)
+	{
+		switch_val=1;
+	}
 
 	else if(strcmp(arr1,"C1")==0)
+	{
+		switch_val=2;
+	}
+
+	else if(strcmp(arr1,"GPIO1")==0)
 	{
 		switch_val=2;
 	}
@@ -243,16 +252,30 @@ void pin_config()
 	{
 		switch_val=3;
 	}
+	else if(strcmp(arr1,"GPIO2")==0)
+	{
+		switch_val=3;
+	}
 
 	else if(strcmp(arr1,"B5")==0)
 	{
 		switch_val=4;
 	}
+	else if(strcmp(arr1,"GPIO3")==0)
+	{
+		switch_val=4;
+	}
+
 
 	else if(strcmp(arr1,"ADC1")==0)
 	{
 		switch_val=5;
 	}
+	else if(strcmp(arr1,"ENABLE")==0)
+	{
+		switch_val=5;
+	}
+
 	else if(strcmp(arr1,"DISABLE")==0)
 	{
 		switch_val=6;
@@ -529,6 +552,8 @@ void pin_config()
 		break;
 	case 15:
 		d.threshold = atof(arr2);
+		break;
+	default:
 		break;
 	}
 }
