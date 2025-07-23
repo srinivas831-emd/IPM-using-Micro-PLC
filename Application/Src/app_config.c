@@ -70,23 +70,12 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 
 	if (huart->Instance == UART4)
 	{
-	        // Critical fix: Simplified routing logic
-//	        if (d.ExpectingGsmResponse)
-//	        {
-//	        	uart3_tx("\r\nFROM INTERRUPT CALL BACK\r\n");
-//	        	uart3_tx(rxwifiBuffer);
-//	            CircularQueue_Enqueue(&GSMQueue, rxwifiBuffer);
-//
-//	        }
-//	        else
-//	        {
-	            if(!CircularQueue_Enqueue(&rxwifiQueue, rxwifiBuffer))
-	            {
 
-	            }
+		if(!CircularQueue_Enqueue(&rxwifiQueue, rxwifiBuffer))
+		{
 
-//	        }
-	        HAL_UART_Receive_IT(&huart4, &rxwifiBuffer, 1);
+		}
+	      HAL_UART_Receive_IT(&huart4, &rxwifiBuffer, 1);
 
 	}
 }
@@ -318,6 +307,10 @@ void pin_config()
 	else if (strcmp(arr1,"THRESHOLD")==0)
 	{
 		switch_val=15;
+	}
+	else if (strcmp(arr1,"LINK")==0)
+	{
+		switch_val=16;
 	}
 
 
@@ -552,6 +545,9 @@ void pin_config()
 		break;
 	case 15:
 		d.threshold = atof(arr2);
+		break;
+	case 16:
+		strncpy(d.link,arr2,strlen(arr2));
 		break;
 	default:
 		break;
