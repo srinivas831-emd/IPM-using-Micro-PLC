@@ -48,7 +48,7 @@ void ADC_handler(struct data *d)
 	}
 	else if (d->adcChnlChecker[0] == 0)
 	{
-		ADC_select_CH1();
+		d->adc1_value=0.0000;
 	}
 
 	if(d->adcChnlChecker[1] == 1)
@@ -61,7 +61,7 @@ void ADC_handler(struct data *d)
 	}
 	else if (d->adcChnlChecker[1] == 0)
 	{
-		ADC_select_CH2();
+		d->adc2_value=0.0000;
 	}
 
 	if(d->adcChnlChecker[2] == 1)
@@ -74,7 +74,7 @@ void ADC_handler(struct data *d)
 	}
 	else if (d->adcChnlChecker[2] == 0)
 	{
-		ADC_select_CH3();
+		d->adc3_value=0.0000;
 	}
 
 	if(d->adcChnlChecker[3] == 1)
@@ -87,7 +87,7 @@ void ADC_handler(struct data *d)
 	}
 	else if (d->adcChnlChecker[3] == 0)
 	{
-		ADC_select_CH4();
+		d->adc4_value=0.0000;
 	}
 			if(d->adc1_value==0||d->adc2_value==0||d->adc3_value==0)
 			{

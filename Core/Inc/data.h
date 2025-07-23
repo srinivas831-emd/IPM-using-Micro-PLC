@@ -46,6 +46,7 @@ struct data
 	char arr2[20];
 	char wifiarr1[10];
 	char wifiarr2[20];
+	char link[200];
 };
 
 extern struct data d;
