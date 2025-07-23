@@ -194,7 +194,7 @@ void DataToGsheet(char *Data)
 	if(GSMInitGsheet()&&HTTPInitAndSend(Data))
 	{
 		EEPROM_ReadAllMessagesAndErase();
-		uart3_tx((uint8_t *)"Success");
+		uart3_tx((uint8_t *)"SUCSESS\r\n");
 	}
 	else
 	{
@@ -266,7 +266,7 @@ bool HTTPInitAndSend(char *dataToSend)
 
     // Set URL
     snprintf(url_buffer, sizeof(url_buffer),
-    "AT+HTTPPARA=\"URL\",\"https://script.google.com/macros/s/AKfycbxB0z9f02ZI33mE-tcD5cWHuz50fhhXr3fjb0sssR3Cv01QXV-QjESBZpegjNcUCHuLmA/exec?%s\"\r\n",dataToSend);
+    "AT+HTTPPARA=\"URL\",\"%s?%s\"\r\n",d.link,dataToSend);
     uart3_tx((uint8_t*)url_buffer);
     if (!GSM_SendCommandandSMS(url_buffer, 5000))
     {
@@ -275,13 +275,19 @@ bool HTTPInitAndSend(char *dataToSend)
 
     GSM_SendCommandandSMS("AT+HTTPPARA=\"CONTENT\",\"application/x-www-form-urlencoded\"\r\n", 1000);
 
-    if (!GSM_SendCommandandSMS("AT+HTTPACTION=0\r\n", 15000))
+    if (!GSM_SendCommandandSMS("AT+HTTPACTION=0\r\n", 1000))
     {
         uart3_tx((uint8_t *)"\rAT+HTTPACTION=0 failed\r");
         return false;
     }
 
-    GSM_SendCommandandSMS("AT+HTTPREAD\r\n", 2000);  // Read response
+    HAL_Delay(10000);
+
+    if (!GSM_SendCommandandSMS("", 1000))
+    {
+        uart3_tx((uint8_t *)"\rAT+HTTPACTION=0 failed\r");
+        return false;
+    }
 
     GSM_SendCommandandSMS("AT+HTTPTERM\r\n", 1000);  // Always close
     HAL_Delay(1000);
@@ -303,9 +309,16 @@ bool GSM_WaitForResponse(uint32_t timeout)
         {
             if (CircularQueue_Dequeue(&rxwifiQueue, &ch))
             {
+
                 gsmBuffer[idx++] = ch;
                 if (idx >= GSM_RX_BUFFER_SIZE-1) idx = 0; // prevent overflow
                 gsmBuffer[idx] = '\0';
+
+                if(strstr((char *)gsmBuffer, "*") ||
+                        strstr((char *)gsmBuffer, "#"))
+                {
+                	extractSMS((char *)gsmBuffer);
+                }
 
                 if (strstr((char *)gsmBuffer, "ERROR") ||
                     strstr((char *)gsmBuffer, "FAIL")||
@@ -313,7 +326,8 @@ bool GSM_WaitForResponse(uint32_t timeout)
                     strstr((char *)gsmBuffer, "+CGREG: 0,2")||
                     strstr((char *)gsmBuffer, "+CGREG: 0,3")||
                     strstr((char *)gsmBuffer, "+CGREG: 0,0")||
-                    strstr((char *)gsmBuffer, "+CGREG: 0,4"))
+                    strstr((char *)gsmBuffer, "+CGREG: 0,4")||
+                    strstr((char *)gsmBuffer, "+CGATT: 0"))
                 {
                     return false;
                 }
@@ -321,8 +335,9 @@ bool GSM_WaitForResponse(uint32_t timeout)
                 else if (strstr((char *)gsmBuffer, "OK\r\n") ||
                     strstr((char *)gsmBuffer, "+CMGS:") ||
                     strstr((char *)gsmBuffer, "\r\n>") ||
-                    strstr((char *)gsmBuffer, "+HTTPACTION:") ||
-                    strstr((char *)gsmBuffer, "+HTTPREAD:"))
+                    strstr((char *)gsmBuffer, "+HTTPACTION:")||
+                    strstr((char *)gsmBuffer, "+CGATT: 1")
+                    )
                 {
                     return true;
                 }
@@ -513,40 +528,38 @@ void GSM_ProcessIncomingSMS(void)
 
 void extractSMS(char *a)
 {
-    int i = 0;
-    int j = 0;
-    char c[200] = {0};
+		int i = 0;
+	    char c[100];  // One command at a time
 
-    while (a[i] != '\0')
-    {
-        // Skip until '='
-        while (a[i] != '\0' && a[i] != '=')
-        {
-            i++;
-        }
+	    while (a[i] != '#' && a[i] != '\0')  // Stop at '#' or end of string
+	    {
+	        // Wait for '*'
+	        if (a[i] == '*')
+	        {
+	            i++; // Skip '*'
+	            int j = 0;
 
-        if (a[i] == '=')
-        {
-            i++;  // Skip '='
-        }
+	            // Copy until ';' or end
+	            while (a[i] != ';' && a[i] != '\0' && j < sizeof(c) - 1)
+	            {
+	                c[j++] = a[i++];
+	            }
 
-        j = 0; // Reset index for c[]
+	            c[j] = '\0';  // Null-terminate
 
-        while (a[i] != '\0' && a[i] != ';')
-        {
-            c[j++] = a[i++];
-        }
+	            if (j > 0)
+	            {
+	                extract_data(c);
+	                pin_config();
+	            }
 
-        c[j] = '\0'; // Ensure null termination
-
-        if (j > 0)
-        {
-        	extract_data(c);
-        	pin_config();
-        }
-
-        if (a[i] == ';') i++; // Skip ';'
-    }
+	            if (a[i] == ';') i++;  // Skip ';'
+	        }
+	        else
+	        {
+	            i++;  // Skip characters until next '*'
+	        }
+	    }
 }
 
 
