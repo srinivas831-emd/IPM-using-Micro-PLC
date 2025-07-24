@@ -209,7 +209,7 @@ bool GSMInitGsheet()
 
     if (!GSM_SendCommandandSMS("AT\r\n", 1000))
     {
-        uart3_tx((uint8_t *)"\rATE0 failed\r");
+        uart3_tx((uint8_t *)"\rAT failed\r");
         return false;
     }
 
@@ -265,8 +265,8 @@ bool HTTPInitAndSend(char *dataToSend)
     }
 
     // Set URL
-    snprintf(url_buffer, sizeof(url_buffer),
-    "AT+HTTPPARA=\"URL\",\"%s?%s\"\r\n",d.link,dataToSend);
+    snprintf(url_buffer, sizeof(url_buffer),"AT+HTTPPARA=\"URL\",\"%s?%s\"\r\n",d.link,dataToSend);
+
     uart3_tx((uint8_t*)url_buffer);
     if (!GSM_SendCommandandSMS(url_buffer, 5000))
     {
@@ -290,7 +290,8 @@ bool HTTPInitAndSend(char *dataToSend)
     }
 
     GSM_SendCommandandSMS("AT+HTTPTERM\r\n", 1000);  // Always close
-    HAL_Delay(1000);
+
+	GSM_SendCommandandSMS("AT+CMGD=1,4\r", 2000);
 
 	CircularQueue_Init(&rxwifiQueue);
     return true;
@@ -350,6 +351,7 @@ bool GSM_WaitForResponse(uint32_t timeout)
 
 bool GSM_SendCommandandSMS(const char *cmd, uint32_t timeout)
 {
+	char discmd[350];
     for (int attempt = 0; attempt < 2; attempt++)
     {
         HAL_UART_Transmit(&huart4, (uint8_t *)cmd, strlen(cmd), HAL_MAX_DELAY);
@@ -359,7 +361,8 @@ bool GSM_SendCommandandSMS(const char *cmd, uint32_t timeout)
 
         if (attempt == 0)
         {
-            uart3_tx((uint8_t *)"Retrying GSM command...\r\n");
+        	sprintf(discmd,"Retrying %s...\r\n",cmd);
+            uart3_tx((uint8_t *)discmd);
             HAL_Delay(200);
         }
     }
@@ -368,14 +371,14 @@ bool GSM_SendCommandandSMS(const char *cmd, uint32_t timeout)
 
 bool GSM_Init(void)
 {
-    if (!GSM_SendCommandandSMS("ATE0\r\n", 1000))
-    {
-    	uart3_tx((uint8_t *)"\rATE0 failed\r");
-    	return false;
-    }
     if (!GSM_SendCommandandSMS("AT\r\n", 1000))
     {
     	uart3_tx((uint8_t *)"\rAT failed\r");
+    	return false;
+    }
+    if (!GSM_SendCommandandSMS("ATE0\r\n", 1000))
+    {
+    	uart3_tx((uint8_t *)"\rATE0 failed\r");
     	return false;
     }
     if (!GSM_SendCommandandSMS("AT+CMGF=1\r\n", 1000))
@@ -445,12 +448,12 @@ void cloud_Process_Commands(void)
 	}
 	else if(d.GSM==0&&d.WiFi==1)
 	{
-		WiFi_ProcessIncomingSMS();
+		WiFi_ProcessIncomingData();
 	}
 }
 
 
-void WiFi_ProcessIncomingSMS(void)
+void WiFi_ProcessIncomingData(void)
 {
 	static uint8_t cmdIndex = 0;  // Persistent index to track the current command
 			uint8_t byte;
@@ -495,6 +498,7 @@ void WiFi_ProcessIncomingSMS(void)
 }
 
 
+
 void GSM_ProcessIncomingSMS(void)
 {
 	 uint8_t byte;
@@ -516,8 +520,6 @@ void GSM_ProcessIncomingSMS(void)
 	            memset(allDataBuffer, 0, sizeof(allDataBuffer));
 	        }
 	    }
-	    //uart3_tx(allDataBuffer);
-	    //uart3_tx(allDataBuffer);
 	    extractSMS(allDataBuffer);
 	    allDataIndex = 0;
 	    memset(allDataBuffer, 0, sizeof(allDataBuffer));
@@ -526,34 +528,34 @@ void GSM_ProcessIncomingSMS(void)
 
 
 
-void extractSMS(char *a)
+void extractSMS(char *unprocessedSMS)
 {
 		int i = 0;
-	    char c[100];  // One command at a time
+	    char processedSMS[200];  // One command at a time
 
-	    while (a[i] != '#' && a[i] != '\0')  // Stop at '#' or end of string
+	    while (unprocessedSMS[i] != '#' && unprocessedSMS[i] != '\0')  // Stop at '#' or end of string
 	    {
 	        // Wait for '*'
-	        if (a[i] == '*')
+	        if (unprocessedSMS[i] == '*')
 	        {
 	            i++; // Skip '*'
 	            int j = 0;
 
 	            // Copy until ';' or end
-	            while (a[i] != ';' && a[i] != '\0' && j < sizeof(c) - 1)
+	            while (unprocessedSMS[i] != ';' && unprocessedSMS[i] != '\0' && j < sizeof(processedSMS) - 1)
 	            {
-	                c[j++] = a[i++];
+	            	processedSMS[j++] = unprocessedSMS[i++];
 	            }
 
-	            c[j] = '\0';  // Null-terminate
+	            processedSMS[j] = '\0';  // Null-terminate
 
 	            if (j > 0)
 	            {
-	                extract_data(c);
+	                extract_data(processedSMS);
 	                pin_config();
 	            }
 
-	            if (a[i] == ';') i++;  // Skip ';'
+	            if (unprocessedSMS[i] == ';') i++;  // Skip ';'
 	        }
 	        else
 	        {
@@ -561,6 +563,7 @@ void extractSMS(char *a)
 	        }
 	    }
 }
+
 
 
 void cloud_set_output(struct data *d)
@@ -584,31 +587,34 @@ void cloud_set_output(struct data *d)
 		{
 			d->GPIO[3] = write_gpio(GPIOB,GPIO_PIN_5, PIN_SET);
 		}
-	//	HAL_UART_Transmit(&huart2, (uint8_t *)d.GPIO, 4,1000);
 }
+
+
 
 void cloud_reset_output(struct data *d1)
 {
-	if(d1->config[0] == 2)
-	{
-		d1->GPIO[0] = write_gpio(GPIOB,GPIO_PIN_2, PIN_RESET);
-	}
+		if(d1->config[0] == 2)
+		{
+			d1->GPIO[0] = write_gpio(GPIOB,GPIO_PIN_2, PIN_RESET);
+		}
 
-	if(d1->config[1] == 2)
-	{
-		d1->GPIO[1]=write_gpio(GPIOC,GPIO_PIN_1, PIN_RESET);
-	}
+		if(d1->config[1] == 2)
+		{
+			d1->GPIO[1]=write_gpio(GPIOC,GPIO_PIN_1, PIN_RESET);
+		}
 
-	if(d1->config[2] == 2)
-	{
-		d1->GPIO[2] = write_gpio(GPIOB,GPIO_PIN_4, PIN_RESET);
-	}
+		if(d1->config[2] == 2)
+		{
+			d1->GPIO[2] = write_gpio(GPIOB,GPIO_PIN_4, PIN_RESET);
+		}
 
-	if(d1->config[3] == 2)
-	{
-		d1->GPIO[3] = write_gpio(GPIOB,GPIO_PIN_5, PIN_RESET);
-	}
+		if(d1->config[3] == 2)
+		{
+			d1->GPIO[3] = write_gpio(GPIOB,GPIO_PIN_5, PIN_RESET);
+		}
 }
+
+
 
 void cloud_read_pinstatus(struct data *d2)
 {
