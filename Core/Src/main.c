@@ -113,9 +113,8 @@ int main(void)
   /* Initialize all configured peripherals */
 
   /* USER CODE BEGIN 2 */
-    d.WiFi=0;
-    d.GSM=1;
-    d.scan_time=2;
+    d.WiFi=1;
+    d.GSM=0;
     d.Mode=1;
     strcpy(d.PhoneNumber,"+918317370381");
     strcpy(d.link,LINK);
@@ -129,7 +128,7 @@ int main(void)
 	CircularQueue_Init(&rxwifiQueue);
 	USERRCV_GPIO_Init();
 	user_GPIO_Init(GPIOB, GPIO_PIN_12,OUTPUT);
-	GSM_Init();
+	//GSM_Init();
   /* USER CODE END 2 */
 
   /* Infinite loop */

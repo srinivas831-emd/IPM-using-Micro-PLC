@@ -11,7 +11,6 @@
 #include "data.h"
 
 float voltage_cal(void);
-
 void ADC_handler(struct data *d);
 
 

@@ -34,9 +34,10 @@ void DataToPhone(char * Message);
 void DataToGsheet();
 bool GSMInitGsheet();
 bool HTTPInitAndSend(char *dataToSend);
-void GSM_ProcessIncomingSMS(void);
-void WiFi_ProcessIncomingSMS(void);
-void extractSMS(char *a);
+void ProcessIncomingData(void);
+void WiFi_ProcessIncomingData(void);
+void extractData(char *a);
+bool DatatoESP(char * Data);
 
 
 

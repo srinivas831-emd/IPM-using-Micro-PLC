@@ -31,7 +31,7 @@ extern char CH2[10];
 extern char CH3[10];
 extern char CH4[10];
 extern char MDS[10];
-uint8_t WiFi_cloud_data[256];
+char WiFi_cloud_data[300];
 uint8_t GSM_cloud_data[256];
 
 //CircularQueue wifirxQueue;
@@ -39,8 +39,6 @@ char *wifitoken;
 
 uint8_t rxwifiBuffer;
 CircularQueue rxwifiQueue;
-CircularQueue GSMQueue;
-static char WifiData[1000];
 
 char wifiarr1[10]   ;
 char wifiarr2[10]   ;
@@ -81,7 +79,7 @@ void UART4_Init(void)
 	}
     else
     {
-        huart4.Init.BaudRate = 9600;  // Default Fallback
+       huart4.Init.BaudRate = 9600;  // Default Fallback
     }
 	huart4.Init.WordLength = UART_WORDLENGTH_8B;
 	huart4.Init.StopBits = UART_STOPBITS_1;
@@ -318,8 +316,9 @@ bool GSM_WaitForResponse(uint32_t timeout)
                 if(strstr((char *)gsmBuffer, "*") ||
                         strstr((char *)gsmBuffer, "#"))
                 {
-                	extractSMS((char *)gsmBuffer);
+                	extractData((char *)gsmBuffer);
                 }
+
 
                 if (strstr((char *)gsmBuffer, "ERROR") ||
                     strstr((char *)gsmBuffer, "FAIL")||
@@ -330,6 +329,8 @@ bool GSM_WaitForResponse(uint32_t timeout)
                     strstr((char *)gsmBuffer, "+CGREG: 0,4")||
                     strstr((char *)gsmBuffer, "+CGATT: 0"))
                 {
+                    uart3_tx((uint8_t*)"\r\ngsmBuffer: ");
+                    uart3_tx((uint8_t*)gsmBuffer);
                     return false;
                 }
                 // Add more success conditions
@@ -337,9 +338,11 @@ bool GSM_WaitForResponse(uint32_t timeout)
                     strstr((char *)gsmBuffer, "+CMGS:") ||
                     strstr((char *)gsmBuffer, "\r\n>") ||
                     strstr((char *)gsmBuffer, "+HTTPACTION:")||
-                    strstr((char *)gsmBuffer, "+CGATT: 1")
-                    )
+                    strstr((char *)gsmBuffer, "+CGATT: 1")||
+                    strstr((char *)gsmBuffer, "SUCCESS"))
                 {
+                    uart3_tx((uint8_t*)"\r\ngsmBuffer: ");
+                    uart3_tx((uint8_t*)gsmBuffer);
                     return true;
                 }
             }
@@ -352,17 +355,19 @@ bool GSM_WaitForResponse(uint32_t timeout)
 bool GSM_SendCommandandSMS(const char *cmd, uint32_t timeout)
 {
 	char discmd[350];
-    for (int attempt = 0; attempt < 2; attempt++)
+	int noofatm=2;
+    for (int attempt = 0; attempt < noofatm; attempt++)
     {
         HAL_UART_Transmit(&huart4, (uint8_t *)cmd, strlen(cmd), HAL_MAX_DELAY);
         HAL_UART_Receive_IT(&huart4,&rxwifiBuffer,1);
         bool success = GSM_WaitForResponse(timeout);
         if (success) return true;
 
-        if (attempt == 0)
+        if (attempt >= 0)
         {
-        	sprintf(discmd,"Retrying %s...\r\n",cmd);
+        	sprintf(discmd,"Retrying %s...",cmd);
             uart3_tx((uint8_t *)discmd);
+	        uart3_tx((uint8_t *)"\r\n");
             HAL_Delay(200);
         }
     }
@@ -417,10 +422,37 @@ void GSM_SendSMS(char *a)
 
 void DataToWiFi(struct data *d)
 {
-	sprintf((char*)WiFi_cloud_data,"TIME,%02d:%02d:%02d;DATE,%02d/%02d/%02d;CH1,%s;CH2,%s;CH3,%s;CH4,%s;MDS,%s;GPIO0,%s;GPIO1,%s;GPIO2,%s;GPIO3,%s;\r\n",d->hour,d->minutes,d->seconds,d->dayofmonth,d->month,d->year,CH1,CH2,CH3,CH4,MDS,d->Status1,d->Status2,d->Status3,d->Status4);
-	HAL_UART_Transmit(&huart4, WiFi_cloud_data, strlen((char*)WiFi_cloud_data), HAL_MAX_DELAY);
-	HAL_Delay(5);
+	snprintf(WiFi_cloud_data,sizeof(WiFi_cloud_data),"DATE,%0d/%02d/%02d;TIME,%02d:%02d:%02d;CH1,%s;CH2,%s;CH3,%s;CH4,%s;MDS,%s;GPIO0,%s;GPIO1,%s;GPIO2,%s;GPIO3,%s;?\r\n",d->dayofmonth,d->month,d->year,d->hour,d->minutes,d->seconds,CH1,CH2,CH3,CH4,MDS,d->Status1,d->Status2,d->Status3,d->Status4);
+	if(DatatoESP(WiFi_cloud_data))
+	{
+			HAL_Delay(1000);
+			EEPROM_ReadAllMessagesAndErase();
+			uart3_tx((uint8_t *)"SUCCESS\r\n");
+	}
+	else
+	{
+			HAL_Delay(1000);
+			EEPROM_StoreMessage(WiFi_cloud_data);
+			uart3_tx((uint8_t*)"\r\nWIFI ERROR DID NOT SEND DATA TO GSHEET\r\n");
+			return;
+	}
+	memset(WiFi_cloud_data,0,sizeof(WiFi_cloud_data));
 }
+
+
+bool DatatoESP(char * Data)
+{
+	uart3_tx((uint8_t*)"\r\nData");
+	uart3_tx((uint8_t*)Data);
+	if(!GSM_SendCommandandSMS(Data,15000))
+	{
+		HAL_Delay(5000);
+		return false;
+	}
+	HAL_Delay(5000);
+	return true;
+}
+
 
 void dataFromCloud()
 {
@@ -442,64 +474,11 @@ void cloud_data_receive()
 
 void cloud_Process_Commands(void)
 {
-	if(d.GSM==1&&d.WiFi==0)
-	{
-		GSM_ProcessIncomingSMS();
-	}
-	else if(d.GSM==0&&d.WiFi==1)
-	{
-		WiFi_ProcessIncomingData();
-	}
+	ProcessIncomingData();
 }
 
 
-void WiFi_ProcessIncomingData(void)
-{
-	static uint8_t cmdIndex = 0;  // Persistent index to track the current command
-			uint8_t byte;
-			while (!CircularQueue_IsEmpty(&rxwifiQueue))
-			{
-				CircularQueue_Dequeue(&rxwifiQueue, &byte);
-
-		//		HAL_UART_Transmit(&huart1, &byte, 1, HAL_MAX_DELAY); // For debugging
-				if(cmdIndex == 0)
-				{
-					memset(WifiData, 0, sizeof(WifiData));
-				}
-
-				// Add byte to the command
-				if (byte != ';')
-				{
-					if (cmdIndex < sizeof(WifiData) - 1)
-					{
-
-						WifiData[cmdIndex++] = byte;
-					}
-
-					else
-
-					{
-						// Handle command overflow (optional)
-						cmdIndex = 0;  // Reset on overflow
-					}
-				}
-
-				else
-
-				{
-					// Command completed when '\n' is received
-					WifiData[cmdIndex] = '\0';  // Null-terminate the command
-					cmdIndex = 0;
-					extract_data(WifiData);
-					pin_config();
-				}
-
-			}
-}
-
-
-
-void GSM_ProcessIncomingSMS(void)
+void ProcessIncomingData(void)
 {
 	 uint8_t byte;
 
@@ -520,7 +499,7 @@ void GSM_ProcessIncomingSMS(void)
 	            memset(allDataBuffer, 0, sizeof(allDataBuffer));
 	        }
 	    }
-	    extractSMS(allDataBuffer);
+	    extractData(allDataBuffer);
 	    allDataIndex = 0;
 	    memset(allDataBuffer, 0, sizeof(allDataBuffer));
 }
@@ -528,7 +507,7 @@ void GSM_ProcessIncomingSMS(void)
 
 
 
-void extractSMS(char *unprocessedSMS)
+void extractData(char *unprocessedSMS)
 {
 		int i = 0;
 	    char processedSMS[200];  // One command at a time

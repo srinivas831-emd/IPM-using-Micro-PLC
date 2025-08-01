@@ -70,12 +70,15 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 
 	if (huart->Instance == UART4)
 	{
+		// Enqueue received bytes into the circular queue
 
 		if(!CircularQueue_Enqueue(&rxwifiQueue, rxwifiBuffer))
 		{
-
+			// Handle queue overflow if necessary (optional)
 		}
-	      HAL_UART_Receive_IT(&huart4, &rxwifiBuffer, 1);
+
+		// Restart UART reception for the next chunk of data
+	    HAL_UART_Receive_IT(&huart4, &rxwifiBuffer, 1);
 
 	}
 }

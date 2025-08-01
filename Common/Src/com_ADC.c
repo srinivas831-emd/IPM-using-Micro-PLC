@@ -267,33 +267,6 @@ void ADC_select_CH4(void)
 	}
 }
 
-
-//void ADC_channel_set( ADC_Channel CH_no)
-//{
-//	if(CH_no == CHANNEL_5)
-//	{
-//	  ss[0] = CH_no;
-//	}
-//	if(CH_no == CHANNEL_6)
-//	{
-//	  ss[1] = CH_no;
-//	}
-//
-//
-//	sConfig.Channel = CH_no;
-//	sConfig.Rank = ADC_REGULAR_RANK_1;
-//	sConfig.SamplingTime = ADC_SAMPLETIME_247CYCLES_5;
-//	sConfig.SingleDiff = ADC_SINGLE_ENDED;
-//	sConfig.OffsetNumber = ADC_OFFSET_NONE;
-//	sConfig.Offset = 0;
-//	if (HAL_ADC_ConfigChannel(&hadc1, &sConfig) != HAL_OK)
-//	{
-//		Error_Handler();
-//	}
-//}
-
-
-
 void adc_start(void)
 {
 	HAL_ADC_Start(&hadc1);

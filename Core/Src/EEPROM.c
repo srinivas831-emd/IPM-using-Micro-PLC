@@ -65,24 +65,29 @@ void EEPROM_Write (uint16_t page, uint16_t offset, uint8_t *data, uint16_t size)
 	uint16_t numofpages = (endPage-startPage) + 1;
 	uint16_t pos=0;
 
-	for (int i=0; i<numofpages; i++)
-	{
-		uint16_t MemAddress = startPage<<paddrposition | offset;
-		uint16_t bytesremaining = bytestowrite(size, offset);
-		if (HAL_I2C_Mem_Write(EEPROM_I2C, EEPROM_ADDR, MemAddress, 2, &data[pos], bytesremaining, 1000) == HAL_OK)
+		for (int i=0; i<numofpages; i++)
 		{
-			uart3_tx((uint8_t*) "EEPROM Write OK\r\n");
+			uint16_t MemAddress = startPage<<paddrposition | offset;
+			uint16_t bytesremaining = bytestowrite(size, offset);
+
+
+			if (HAL_I2C_Mem_Write(EEPROM_I2C, EEPROM_ADDR, MemAddress, 2, &data[pos], bytesremaining, 1000) == HAL_OK)
+			{
+				uart3_tx((uint8_t*) "EEPROM Write OK\r\n");
+			}
+			else
+			{
+				uart3_tx((uint8_t*) "EEPROM Write FAILED\r\n");
+			}
+
+
+			startPage += 1;
+			offset=0;
+			size = size-bytesremaining;
+			pos += bytesremaining;
+			HAL_Delay (10);
 		}
-		else
-		{
-			uart3_tx((uint8_t*) "EEPROM Write FAILED\r\n");
-		}
-		startPage += 1;
-		offset=0;
-		size = size-bytesremaining;
-		pos += bytesremaining;
-		HAL_Delay (5);
-	}
+
 }
 
 void EEPROM_Read (uint16_t page, uint16_t offset, uint8_t *data, uint16_t size)
@@ -109,7 +114,7 @@ void EEPROM_Read (uint16_t page, uint16_t offset, uint8_t *data, uint16_t size)
 		offset=0;
 		size = size-bytesremaining;
 		pos += bytesremaining;
-		HAL_Delay(5);
+		HAL_Delay(10);
 	}
 }
 
@@ -120,8 +125,9 @@ void EEPROM_PageErase (uint16_t page)
 	uint8_t data[PAGE_SIZE];
 	memset(data,0x00,PAGE_SIZE);
 	HAL_I2C_Mem_Write(EEPROM_I2C, EEPROM_ADDR, MemAddress, 2, data, PAGE_SIZE, 1000);
-	HAL_Delay (5);
+	HAL_Delay (10);
 }
+
 
 void EEPROM_StoreMessage(char *message)
 {
@@ -151,7 +157,8 @@ void EEPROM_StoreMessage(char *message)
 
 	    // Write the 200-byte block
 	    EEPROM_Write(page, offset, buffer, MAX_MESSAGE_LEN);
-	}
+}
+
 
 void EEPROM_ReadAllMessagesAndErase(void)
 {
@@ -179,98 +186,41 @@ void EEPROM_ReadAllMessagesAndErase(void)
 
         memset(buffer, 0, sizeof(buffer));
         EEPROM_Read(page, offset, (uint8_t *)buffer, MAX_MESSAGE_LEN);
-        if (buffer[0] != '\0')
-        {
-        if(d.Mode==0)
-        {
-        	GSM_SendSMS(buffer);
-        }
-        if(d.Mode==1)
-        {
-        	if(!GSMInitGsheet()||!HTTPInitAndSend(buffer))
-        	{
-        		allUploaded=false;
-        	}
+		if(d.WiFi==1&&d.GSM==0)
+		{
+			if(!DatatoESP(buffer))
+			{
+				allUploaded=false;
+			}
+		}
+		else if(d.WiFi==0&&d.GSM==1)
+		{
+			if(d.Mode==0)
+			{
+				GSM_SendSMS(buffer);
+			}
+			if(d.Mode==1)
+			{
+				if(!GSMInitGsheet()||!HTTPInitAndSend(buffer))
+				{
+					allUploaded=false;
+				}
 
-        }
-        }
+			}
+		}
     }
+
     // Erase all used pages including metadata
-    if(d.Mode==0||allUploaded==true)
+    if(allUploaded==true)
     {
-    EEPROM_PageErase(EEPROM_FLAG_PAGE);
-    uint8_t total_pages = ((count * MAX_MESSAGE_LEN) / PAGE_SIZE) + 1;
-    for (uint8_t i = 0; i < total_pages; i++)
-    {
-        EEPROM_PageErase(EEPROM_LOG_START_PAGE + i);
-    }
-
-    uart3_tx((uint8_t *)"EEPROM erased after reading all messages.\r\n");
-    }
+		for (uint8_t i = 0; i <= PAGE_NUM; i++)
+			{
+				EEPROM_PageErase(i);
+			}
+		uart3_tx((uint8_t *)"EEPROM erased after reading all messages.\r\n");
+	}
     else
 	{
 		uart3_tx((uint8_t *)"Some messages failed to upload. EEPROM not erased.\r\n");
 	}
 }
-
-void NormalizeToMultilineFormat(const char *input, char *output, size_t outputSize)
-{
-    // Check for "\r\n" to determine if input is already in the correct format
-    if (strstr(input, "\r\n") != NULL) {
-        // Already formatted correctly
-        strncpy(output, input, outputSize - 1);
-        output[outputSize - 1] = '\0';
-        return;
-    }
-
-    // Replace '&' with "\r\n"
-    size_t outIdx = 0;
-    for (size_t i = 0; input[i] != '\0' && outIdx < outputSize - 1; ++i)
-    {
-        if (input[i] == '&')
-        {
-            if (outIdx + 2 < outputSize - 1)
-            {
-                output[outIdx++] = '\r';
-                output[outIdx++] = '\n';
-            }
-            else
-            {
-                break;  // not enough space
-            }
-        }
-        else
-        {
-            output[outIdx++] = input[i];
-        }
-    }
-    output[outIdx] = '\0';
-}
-
-void CSVtoQueryString(const char *input, char *output, size_t outputSize)
-{
-	char inputCopy[512];
-	    strncpy(inputCopy, input, sizeof(inputCopy) - 1);
-	    inputCopy[sizeof(inputCopy) - 1] = '\0';
-
-	    output[0] = '\0';
-
-	    char *line = strtok(inputCopy, "\r\n");
-	    int isFirst = 1;
-
-	    while (line != NULL)
-	    {
-	        if (strlen(line) > 0)
-	        {
-	            if (!isFirst)
-	            {
-	                strncat(output, "&", outputSize - strlen(output) - 1);
-	            }
-	            strncat(output, line, outputSize - strlen(output) - 1);
-	            isFirst = 0;
-	        }
-	        line = strtok(NULL, "\r\n");
-	    }
-}
-
-
