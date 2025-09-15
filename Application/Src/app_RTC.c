@@ -55,16 +55,16 @@ void set_time(uint8_t sec,uint8_t min,uint8_t hr)
    }
 //	if(HAL_I2C_Mem_Write(&hi2c1, RTC_add, 0x00, I2C_MEMADD_SIZE_8BIT, Set_time, 3, HAL_MAX_DELAY)== HAL_OK)
 //	{
-//		uart3_tx("I2C WRITE TIME SUCESSES\r\n");
+//		uart3_tx((uint8_t*)"I2C WRITE TIME SUCESSES\r\n");
 //	}
 //	else
 //	{
-//		uart3_tx("I2C WRITE TIME not SUCESSES\r\n");
+//		uart3_tx((uint8_t*)"I2C WRITE TIME not SUCESSES\r\n");
 //	}
 //  }
 //	else
 //	{
-//		uart3_tx("I2C WRITE TIME VALUES ERROR \r\n");
+//		uart3_tx((uint8_t*)"I2C WRITE TIME VALUES ERROR \r\n");
 //	}
 }
 
@@ -81,16 +81,16 @@ void set_date(uint8_t day,uint8_t dat,uint8_t mon,uint8_t yr)
 	}
 //	if(HAL_I2C_Mem_Write(&hi2c1, RTC_add, 0x03, I2C_MEMADD_SIZE_8BIT, Set_date, 4, HAL_MAX_DELAY)==HAL_OK)
 //	{
-//		uart3_tx("I2C WRITE DATE SUCESSES\r\n");
+//		uart3_tx((uint8_t*)"I2C WRITE DATE SUCESSES\r\n");
 //	}
 //	else
 //	{
-//		uart3_tx("I2C WRITE DATE not SUCESSES\r\n");
+//		uart3_tx((uint8_t*)"I2C WRITE DATE not SUCESSES\r\n");
 //	}
 //    }
 //	else
 //	{
-//		uart3_tx("I2C WRITE DATE VALUES ERROR \r\n");
+//		uart3_tx((uint8_t*)"I2C WRITE DATE VALUES ERROR \r\n");
 //	}
 }
 

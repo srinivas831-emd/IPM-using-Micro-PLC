@@ -35,18 +35,17 @@ void DataToCloud(struct data *d)
 
 	// LATEST CODE
 		static uint8_t last_triggered_minute = 255;
-		static uint8_t last_triggered_hour = 255;
+
 		static uint8_t base_minute = 0;
 	    //tatic uint8_t base_second = 0;
-	    static uint8_t base_hour = 0;
+
 	    static uint8_t initialized = 0;
 	    static uint8_t previous_scan_time = 0;
 	    char uart_buf[32];
-
 	    uint8_t curr_scantime=d->scan_time;
 	    uint8_t curr_min = d->minutes;
 	    //uint8_t curr_sec = d->seconds;
-	    uint8_t curr_hour = d->hour;
+
 
 
 	    // Format data for transmission
@@ -124,7 +123,7 @@ void DataToCloud(struct data *d)
 					strcpy(d->Status3, "UNKNOWN");
 				}
 
-//////////////////////////////////////STATUS 4//////////////////////////////////////////////////////////////////////////////////////////STATUS 4////////////////////////////////////////////////////
+//////////////////////////////////////////////////////////STATUS 4//////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 	    		if(d->config[3]== 1)
 				{
 					strcpy(d->Status4, "HIGH");
@@ -145,12 +144,12 @@ void DataToCloud(struct data *d)
 				{
 					strcpy(d->Status4, "UNKNOWN");
 				}
-//////////////////////////////////////STATUS 4///////////////////////////////////////////////////////////////////////////////////////STATUS 4/////////////////////////////////////////////////////////
+/////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////////
 
 	    if (!initialized)
 	    {
 	        base_minute = curr_min;
-	        base_hour = curr_hour;
+	        DataToPass();
 	        initialized = 1;
 	        return;
 	    }
@@ -158,7 +157,6 @@ void DataToCloud(struct data *d)
 	    if (curr_scantime != previous_scan_time)
 	    	{
 	    		base_minute = curr_min;
-	    		base_hour = curr_hour;
 	    		previous_scan_time = curr_scantime;
 	    		return;
 	    	}
@@ -166,7 +164,7 @@ void DataToCloud(struct data *d)
 	    // Compute expected minute considering wrap-around
 	    uint8_t expected_minute = (base_minute + curr_scantime) % 60;
 
-	    if (curr_min == expected_minute&&((curr_min != last_triggered_minute)||(curr_hour!=last_triggered_hour)))// && curr_sec == base_second)
+	    if (curr_min == expected_minute)//&&((curr_min != last_triggered_minute)||(curr_hour!=last_triggered_hour)))// && curr_sec == base_second)
 	    {
 	        uart3_tx((uint8_t *)"\r\ncurr_scantime: ");
 	        sprintf(uart_buf, "%u",curr_scantime);
@@ -193,10 +191,7 @@ void DataToCloud(struct data *d)
 	        DataToPass();
 	        //dataToUart();
 	        last_triggered_minute = curr_min;
-	        last_triggered_hour = curr_hour;
 			base_minute = curr_min;   // Update reference for next transmission
-			base_hour = curr_hour;
-
 	    }
 }
 

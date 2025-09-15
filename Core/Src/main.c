@@ -39,7 +39,7 @@
 #include "app_terminal.h"
 #include "circular_queue.h"
 #include "com_config.h"
-#define LINK "https://script.google.com/macros/s/AKfycbxB0z9f02ZI33mE-tcD5cWHuz50fhhXr3fjb0sssR3Cv01QXV-QjESBZpegjNcUCHuLmA/exec"
+#define LINK "https://script.google.com/macros/s/AKfycbwmdT9DEr9m_KGsWR6apccdOHXrV_cYDjNn3aAnfBakDnVC0EI7YB95Iz2Db-VnBatXEQ/exec"
 
 /* USER CODE END Includes */
 
@@ -116,6 +116,7 @@ int main(void)
     d.WiFi=1;
     d.GSM=0;
     d.Mode=1;
+    d.scan_time = 2;
     strcpy(d.PhoneNumber,"+918317370381");
     strcpy(d.link,LINK);
 	user_USART1_UART_Init();
@@ -127,7 +128,7 @@ int main(void)
 	CircularQueue_Init(&rxQueue);
 	CircularQueue_Init(&rxwifiQueue);
 	USERRCV_GPIO_Init();
-	user_GPIO_Init(GPIOB, GPIO_PIN_12,OUTPUT);
+	channelGpioPins();
 	//GSM_Init();
   /* USER CODE END 2 */
 

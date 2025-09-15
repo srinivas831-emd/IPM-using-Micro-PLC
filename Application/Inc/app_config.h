@@ -21,6 +21,7 @@ void extract_data(char* command);
 void Process_Commands(void);
 void pin_config();
 void clear_buffer();
+void channelGpioPins();
 
 
 #endif /* INC_APP_CONFIG_H_ */

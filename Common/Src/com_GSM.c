@@ -50,7 +50,6 @@ extern uint8_t ch;
 #define ALL_DATA_BUFFER_SIZE 1024
 
 char allDataBuffer[ALL_DATA_BUFFER_SIZE];
-static uint16_t allDataIndex = 0;
 extern UART_HandleTypeDef huart1;
 extern UART_HandleTypeDef huart3;
 
@@ -295,62 +294,128 @@ bool HTTPInitAndSend(char *dataToSend)
     return true;
 }
 
+
 bool GSM_WaitForResponse(uint32_t timeout)
 {
     uint32_t startTime = HAL_GetTick();
-    uint8_t gsmBuffer[GSM_RX_BUFFER_SIZE] = {0};
+    uint8_t gsmBuffer[GSM_RX_BUFFER_SIZE];
     uint16_t idx = 0;
     uint8_t ch;
 
+    /* fill buffer with zeros initially */
+    memset(gsmBuffer, 0, sizeof(gsmBuffer));
+
     while ((HAL_GetTick() - startTime) < timeout)
     {
+        /* empty queue into buffer */
         while (!CircularQueue_IsEmpty(&rxwifiQueue))
         {
             if (CircularQueue_Dequeue(&rxwifiQueue, &ch))
             {
-
-                gsmBuffer[idx++] = ch;
-                if (idx >= GSM_RX_BUFFER_SIZE-1) idx = 0; // prevent overflow
-                gsmBuffer[idx] = '\0';
-
-                if(strstr((char *)gsmBuffer, "*") ||
-                        strstr((char *)gsmBuffer, "#"))
+                if (idx < GSM_RX_BUFFER_SIZE - 1)  // keep space for '\0'
                 {
-                	extractData((char *)gsmBuffer);
+                    gsmBuffer[idx++] = ch;
                 }
-
-
-                if (strstr((char *)gsmBuffer, "ERROR") ||
-                    strstr((char *)gsmBuffer, "FAIL")||
-                    strstr((char *)gsmBuffer, "+CSQ: 99,99")||
-                    strstr((char *)gsmBuffer, "+CGREG: 0,2")||
-                    strstr((char *)gsmBuffer, "+CGREG: 0,3")||
-                    strstr((char *)gsmBuffer, "+CGREG: 0,0")||
-                    strstr((char *)gsmBuffer, "+CGREG: 0,4")||
-                    strstr((char *)gsmBuffer, "+CGATT: 0"))
-                {
-                    uart3_tx((uint8_t*)"\r\ngsmBuffer: ");
-                    uart3_tx((uint8_t*)gsmBuffer);
-                    return false;
-                }
-                // Add more success conditions
-                else if (strstr((char *)gsmBuffer, "OK\r\n") ||
-                    strstr((char *)gsmBuffer, "+CMGS:") ||
-                    strstr((char *)gsmBuffer, "\r\n>") ||
-                    strstr((char *)gsmBuffer, "+HTTPACTION:")||
-                    strstr((char *)gsmBuffer, "+CGATT: 1")||
-                    strstr((char *)gsmBuffer, "SUCCESS"))
-                {
-                    uart3_tx((uint8_t*)"\r\ngsmBuffer: ");
-                    uart3_tx((uint8_t*)gsmBuffer);
-                    return true;
-                }
+                // if overflow, you can discard or handle differently
             }
         }
-        HAL_Delay(10); // Small delay to prevent busy waiting
+
+        /* terminate so strstr() works */
+        gsmBuffer[idx] = '\0';
+
+        /* now test full buffer for keywords */
+        if (strstr((char *)gsmBuffer, "ERROR") ||
+            strstr((char *)gsmBuffer, "FAIL") ||
+            strstr((char *)gsmBuffer, "+CSQ: 99,99") ||
+            strstr((char *)gsmBuffer, "+CGREG: 0,2") ||
+            strstr((char *)gsmBuffer, "+CGREG: 0,3") ||
+            strstr((char *)gsmBuffer, "+CGREG: 0,0") ||
+            strstr((char *)gsmBuffer, "+CGREG: 0,4") ||
+            strstr((char *)gsmBuffer, "+CGATT: 0"))
+        {
+        	uart3_tx((uint8_t*)gsmBuffer);
+            extractData((char *)gsmBuffer);  // parse full string
+            return false;
+        }
+        else if (strstr((char *)gsmBuffer, "OK\r\n") ||
+                 strstr((char *)gsmBuffer, "+CMGS:") ||
+                 strstr((char *)gsmBuffer, "\r\n>") ||
+                 strstr((char *)gsmBuffer, "+HTTPACTION:") ||
+                 strstr((char *)gsmBuffer, "+CGATT: 1") ||
+                 strstr((char *)gsmBuffer, "SUCCESS"))
+        {
+        	uart3_tx((uint8_t*)gsmBuffer);
+            extractData((char *)gsmBuffer);  // parse full string
+            return true;
+        }
+
+        HAL_Delay(10);  // small delay
     }
-    return false;  // Timeout
+
+    /* timeout reached, terminate and optionally parse whatever we have */
+    gsmBuffer[idx] = '\0';
+    if (idx > 0)
+    {
+    	uart3_tx((uint8_t*)gsmBuffer);
+        extractData((char *)gsmBuffer);
+    }
+
+    return false;  // timeout
 }
+
+
+//bool GSM_WaitForResponse(uint32_t timeout)
+//{
+//    uint32_t startTime = HAL_GetTick();
+//    uint8_t gsmBuffer[GSM_RX_BUFFER_SIZE] = {0};
+//    uint16_t idx = 0;
+//    uint8_t ch;
+//
+//    while ((HAL_GetTick() - startTime) < timeout)
+//    {
+//        while (!CircularQueue_IsEmpty(&rxwifiQueue))
+//        {
+//            if (CircularQueue_Dequeue(&rxwifiQueue, &ch))
+//            {
+//
+//                gsmBuffer[idx++] = ch;
+//                if (idx >= GSM_RX_BUFFER_SIZE-1) idx = 0; // prevent overflow
+//                gsmBuffer[idx] = '\0';
+//
+//                if (strstr((char *)gsmBuffer, "ERROR") ||
+//                    strstr((char *)gsmBuffer, "FAIL")||
+//                    strstr((char *)gsmBuffer, "+CSQ: 99,99")||
+//                    strstr((char *)gsmBuffer, "+CGREG: 0,2")||
+//                    strstr((char *)gsmBuffer, "+CGREG: 0,3")||
+//                    strstr((char *)gsmBuffer, "+CGREG: 0,0")||
+//                    strstr((char *)gsmBuffer, "+CGREG: 0,4")||
+//                    strstr((char *)gsmBuffer, "+CGATT: 0"))
+//                {
+////                    uart3_tx((uint8_t*)"\r\ngsmBuffer: ");
+////                    uart3_tx((uint8_t*)gsmBuffer);
+////                    uart3_tx((uint8_t*)"\r\n");
+//                    return false;
+//                }
+//                // Add more success conditions
+//                else if (strstr((char *)gsmBuffer, "OK\r\n") ||
+//                    strstr((char *)gsmBuffer, "+CMGS:") ||
+//                    strstr((char *)gsmBuffer, "\r\n>") ||
+//                    strstr((char *)gsmBuffer, "+HTTPACTION:")||
+//                    strstr((char *)gsmBuffer, "+CGATT: 1")||
+//                    strstr((char *)gsmBuffer, "SUCCESS"))
+//                {
+////                    uart3_tx((uint8_t*)"\r\ngsmBuffer: ");
+////                    uart3_tx((uint8_t*)gsmBuffer);
+////                    uart3_tx((uint8_t*)"\r\n");
+//                    return true;
+//                }
+//            }
+//        }
+//        HAL_Delay(10); // Small delay to prevent busy waiting
+//    }
+//    return false;  // Timeout
+//}
+
 
 bool GSM_SendCommandandSMS(const char *cmd, uint32_t timeout)
 {
@@ -361,15 +426,30 @@ bool GSM_SendCommandandSMS(const char *cmd, uint32_t timeout)
         HAL_UART_Transmit(&huart4, (uint8_t *)cmd, strlen(cmd), HAL_MAX_DELAY);
         HAL_UART_Receive_IT(&huart4,&rxwifiBuffer,1);
         bool success = GSM_WaitForResponse(timeout);
-        if (success) return true;
+        if (success)
+		{
+        	if(d.WiFi==1&&d.GSM==0)
+        	{
+				HAL_Delay(10000);
+				return true;
+        	}
+        	else
+        	{
+        		return true;
+        	}
+
+		}
 
         if (attempt >= 0)
         {
         	sprintf(discmd,"Retrying %s...",cmd);
             uart3_tx((uint8_t *)discmd);
 	        uart3_tx((uint8_t *)"\r\n");
-            HAL_Delay(200);
         }
+        if(d.WiFi==1&&d.GSM==0)
+		{
+			HAL_Delay(20000);
+		}
     }
     return false;
 }
@@ -425,13 +505,11 @@ void DataToWiFi(struct data *d)
 	snprintf(WiFi_cloud_data,sizeof(WiFi_cloud_data),"DATE,%0d/%02d/%02d;TIME,%02d:%02d:%02d;CH1,%s;CH2,%s;CH3,%s;CH4,%s;MDS,%s;GPIO0,%s;GPIO1,%s;GPIO2,%s;GPIO3,%s;?\r\n",d->dayofmonth,d->month,d->year,d->hour,d->minutes,d->seconds,CH1,CH2,CH3,CH4,MDS,d->Status1,d->Status2,d->Status3,d->Status4);
 	if(DatatoESP(WiFi_cloud_data))
 	{
-			HAL_Delay(1000);
 			EEPROM_ReadAllMessagesAndErase();
 			uart3_tx((uint8_t *)"SUCCESS\r\n");
 	}
 	else
 	{
-			HAL_Delay(1000);
 			EEPROM_StoreMessage(WiFi_cloud_data);
 			uart3_tx((uint8_t*)"\r\nWIFI ERROR DID NOT SEND DATA TO GSHEET\r\n");
 			return;
@@ -444,12 +522,10 @@ bool DatatoESP(char * Data)
 {
 	uart3_tx((uint8_t*)"\r\nData");
 	uart3_tx((uint8_t*)Data);
-	if(!GSM_SendCommandandSMS(Data,15000))
+	if(!GSM_SendCommandandSMS(Data,20000))
 	{
-		HAL_Delay(5000);
 		return false;
 	}
-	HAL_Delay(5000);
 	return true;
 }
 
@@ -458,9 +534,6 @@ void dataFromCloud()
 {
 	cloud_data_receive();
 	cloud_Process_Commands();
-	cloud_reset_output(&d);
-	cloud_set_output(&d);
-	cloud_read_pinstatus(&d);
 }
 
 void cloud_data_receive()
@@ -474,34 +547,64 @@ void cloud_data_receive()
 
 void cloud_Process_Commands(void)
 {
-	ProcessIncomingData();
+	if(d.GSM==0&&d.WiFi==1)
+	{
+		ProcessIncomingData();
+	}
+	else if(d.GSM==1&&d.WiFi==0)
+	{
+		ProcessIncomingSMS();
+	}
 }
 
 
 void ProcessIncomingData(void)
 {
-	 uint8_t byte;
+		uint8_t byte;
+		char fullString[300]={0};
+		int i=0;
+		while (!CircularQueue_IsEmpty(&rxwifiQueue))
+		{
+		    CircularQueue_Dequeue(&rxwifiQueue, &byte);
+		    if(byte!='#')
+		    {
+		    	fullString[i++]=byte;
+		    }
 
-	    while (!CircularQueue_IsEmpty(&rxwifiQueue))
-	    {
-	        CircularQueue_Dequeue(&rxwifiQueue, &byte);
 
-	        // Add byte to buffer (if space)
-	        if (allDataIndex < ALL_DATA_BUFFER_SIZE - 1)
-	        {
-	            allDataBuffer[allDataIndex++] = byte;
-	            allDataBuffer[allDataIndex] = '\0'; // Null-terminate
-	        }
-	        else
-	        {
-	            // Buffer full — optional: reset or overwrite
-	            allDataIndex = 0;
-	            memset(allDataBuffer, 0, sizeof(allDataBuffer));
-	        }
-	    }
-	    extractData(allDataBuffer);
-	    allDataIndex = 0;
-	    memset(allDataBuffer, 0, sizeof(allDataBuffer));
+		}
+			fullString[i]='\0';
+			uart3_tx((uint8_t*)fullString);
+			HAL_Delay(500);
+			extractData(fullString);
+}
+
+void ProcessIncomingSMS(void)
+{
+	uint8_t byte;
+	int allDataIndex=0;
+
+		    while (!CircularQueue_IsEmpty(&rxwifiQueue))
+		    {
+		        CircularQueue_Dequeue(&rxwifiQueue, &byte);
+
+		        // Add byte to buffer (if space)
+		        if (allDataIndex < ALL_DATA_BUFFER_SIZE - 1)
+		        {
+		            allDataBuffer[allDataIndex++] = byte;
+		            allDataBuffer[allDataIndex] = '\0'; // Null-terminate
+		        }
+		        else
+		        {
+		            // Buffer full — optional: reset or overwrite
+		            allDataIndex = 0;
+		            memset(allDataBuffer, 0, sizeof(allDataBuffer));
+		        }
+		    }
+		    uart3_tx((uint8_t*)allDataBuffer);
+		    extractData(allDataBuffer);
+		    allDataIndex = 0;
+		    memset(allDataBuffer, 0, sizeof(allDataBuffer));
 }
 
 
@@ -509,110 +612,42 @@ void ProcessIncomingData(void)
 
 void extractData(char *unprocessedSMS)
 {
-		int i = 0;
-	    char processedSMS[200];  // One command at a time
+	int i = 0;
+	char processedSMS[1024];  // One command at a time
 
-	    while (unprocessedSMS[i] != '#' && unprocessedSMS[i] != '\0')  // Stop at '#' or end of string
-	    {
-	        // Wait for '*'
-	        if (unprocessedSMS[i] == '*')
-	        {
-	            i++; // Skip '*'
-	            int j = 0;
-
-	            // Copy until ';' or end
-	            while (unprocessedSMS[i] != ';' && unprocessedSMS[i] != '\0' && j < sizeof(processedSMS) - 1)
-	            {
-	            	processedSMS[j++] = unprocessedSMS[i++];
-	            }
-
-	            processedSMS[j] = '\0';  // Null-terminate
-
-	            if (j > 0)
-	            {
-	                extract_data(processedSMS);
-	                pin_config();
-	            }
-
-	            if (unprocessedSMS[i] == ';') i++;  // Skip ';'
-	        }
-	        else
-	        {
-	            i++;  // Skip characters until next '*'
-	        }
-	    }
-}
-
-
-
-void cloud_set_output(struct data *d)
-{
-		if(d->config[0] == 1)
+	while (unprocessedSMS[i] != '\0' )//&& unprocessedSMS[i] != '\0')  // Stop at '#' or end of string
+	{
+		// Wait for '*'
+		if (unprocessedSMS[i] == '*')
 		{
-			d->GPIO[0] = write_gpio(GPIOB,GPIO_PIN_2, PIN_SET);
-		}
+			i++; // Skip '*'
+			int j = 0;
 
-		if(d->config[1] == 1)
-		{
-			d->GPIO[1] = write_gpio(GPIOC,GPIO_PIN_1, PIN_SET);
-		}
+			// Copy until ';' or end
+			while (unprocessedSMS[i] != ';' && unprocessedSMS[i] != '\0' && j < sizeof(processedSMS) - 1)
+			{
+				processedSMS[j++] = unprocessedSMS[i++];
+			}
 
-		if(d->config[2] == 1)
-		{
-			d->GPIO[2] = write_gpio(GPIOB,GPIO_PIN_4, PIN_SET);
-		}
+				processedSMS[j] = '\0';  // Null-terminate
 
-		if(d->config[3] == 1)
-		{
-			d->GPIO[3] = write_gpio(GPIOB,GPIO_PIN_5, PIN_SET);
-		}
-}
+			if (j > 0)
+			{
+				uart3_tx((uint8_t*)"\n");
+				uart3_tx((uint8_t*)"processedSMS: ");
+				uart3_tx((uint8_t*)processedSMS);
+				uart3_tx((uint8_t*)"\n");
+				extract_data(processedSMS);
+			}
 
-
-
-void cloud_reset_output(struct data *d1)
-{
-		if(d1->config[0] == 2)
-		{
-			d1->GPIO[0] = write_gpio(GPIOB,GPIO_PIN_2, PIN_RESET);
+				if (unprocessedSMS[i] == ';') i++;  // Skip ';'
 		}
+			else
+			{
+				i++;  // Skip characters until next '*'
+			}
+	}
 
-		if(d1->config[1] == 2)
-		{
-			d1->GPIO[1]=write_gpio(GPIOC,GPIO_PIN_1, PIN_RESET);
-		}
-
-		if(d1->config[2] == 2)
-		{
-			d1->GPIO[2] = write_gpio(GPIOB,GPIO_PIN_4, PIN_RESET);
-		}
-
-		if(d1->config[3] == 2)
-		{
-			d1->GPIO[3] = write_gpio(GPIOB,GPIO_PIN_5, PIN_RESET);
-		}
-}
-
-
-
-void cloud_read_pinstatus(struct data *d2)
-{
-		if(d2->config[0]==3)
-		{
-			d2->GPIO[0]=read_gpio( GPIOB,GPIO_PIN_2);
-		}
-		if(d2->config[1]==3)
-		{
-			d2->GPIO[1]=read_gpio(GPIOC,GPIO_PIN_1);
-		}
-		if(d2->config[2]==3)
-		{
-			d2->GPIO[2]=read_gpio( GPIOB,GPIO_PIN_4);
-		}
-		if(d2->config[3]==3)
-		{
-			d2->GPIO[3]=read_gpio( GPIOB,GPIO_PIN_5);
-		}
 }
 
 

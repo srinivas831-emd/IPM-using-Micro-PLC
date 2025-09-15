@@ -22,9 +22,6 @@ void cloud_data_receive();
 void cloud_Process_Commands(void);
 void Process_GPIO_Status();
 void extract_cloud_data(char* WifiData);
-void cloud_set_output(struct data *d);
-void cloud_reset_output(struct data *d1);
-void cloud_read_pinstatus(struct data *d2);
 void GSM_SendSMS();
 bool GSM_Init(void);
 bool GSM_SendCommandandSMS(const char *cmd, uint32_t timeout);
@@ -38,6 +35,7 @@ void ProcessIncomingData(void);
 void WiFi_ProcessIncomingData(void);
 void extractData(char *a);
 bool DatatoESP(char * Data);
+void ProcessIncomingSMS(void);
 
 
 

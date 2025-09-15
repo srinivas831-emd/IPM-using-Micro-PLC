@@ -18,6 +18,7 @@
 #include <stdlib.h>
 #include "circular_queue.h"
 #include "com_GSM.h"
+#include "com_terminal.h"
 
 int switch_val=0;
 //char tx_data[15];
@@ -33,7 +34,7 @@ extern struct data d;
 
 uint8_t rxBuffer;  // UART receive buffer
 CircularQueue rxQueue;// Circular queue for storing received data
-static char command[60];  // Temporary storage for a single command
+
 
 extern uint8_t rxwifiBuffer;
 uint8_t ch;
@@ -46,15 +47,12 @@ void Configurator()
 {
 	data_receive();
 	Process_Commands();
-	reset_output(&d);
-	set_output(&d);
-	read_pinstatus(&d);
 }
 
 
 void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 {
-	if (huart->Instance == USART1)
+	if (huart->Instance == USART1) //PC
 	{
 		// Enqueue received bytes into the circular queue
 
@@ -68,14 +66,15 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 
 	}
 
-	if (huart->Instance == UART4)
+	if (huart->Instance == UART4) //gsm/esp32
 	{
-		// Enqueue received bytes into the circular queue
 
 		if(!CircularQueue_Enqueue(&rxwifiQueue, rxwifiBuffer))
 		{
 			// Handle queue overflow if necessary (optional)
 		}
+
+	// Enqueue received bytes into the circular queue
 
 		// Restart UART reception for the next chunk of data
 	    HAL_UART_Receive_IT(&huart4, &rxwifiBuffer, 1);
@@ -86,36 +85,24 @@ void HAL_UART_RxCpltCallback(UART_HandleTypeDef *huart)
 
 void Process_Commands(void)
 {
-	static uint8_t cmdIndex = 0;  // Persistent index to track the current command
 	uint8_t byte;
+	char fullString[300]={0};
+	int i=0;
 
 	while (!CircularQueue_IsEmpty(&rxQueue))
-		{
-		CircularQueue_Dequeue(&rxQueue, &byte);
-
-		// Add byte to the command
-		if (byte != ';')
-		{
-			if (cmdIndex < sizeof(command) - 1)
-			{
-				command[cmdIndex++] = byte;
-			} else
-			{
-				// Handle command overflow (optional)
-				cmdIndex = 0;  // Reset on overflow
-			}
-		} else
-		{
-			// Command completed when '\n' is received
-			command[cmdIndex] = '\0';  // Null-terminate the command
-			cmdIndex = 0;
-
-			// Process the command
-			extract_data(command);
-			pin_config();
-		}
+	{
+	    CircularQueue_Dequeue(&rxQueue, &byte);
+	    if(byte!='#')
+	    {
+	    	fullString[i++]=byte;
+	    }
 	}
+		fullString[i]='\0';
+		HAL_Delay(500);
+		uart3_tx((uint8_t*)fullString);
+		extractData(fullString);
 }
+
 
 
 void set_output(struct data *d)
@@ -214,8 +201,12 @@ void extract_data(char* command)
 		//token = strtok(NULL, ",");
 	}
 
-
+	pin_config();
+	reset_output(&d);
+	set_output(&d);
+	read_pinstatus(&d);
 }
+
 
 
 void pin_config()
@@ -314,6 +305,38 @@ void pin_config()
 	else if (strcmp(arr1,"LINK")==0)
 	{
 		switch_val=16;
+	}
+	else if (strcmp(arr1,"CH1MAX")==0)
+	{
+		switch_val=17;
+	}
+	else if (strcmp(arr1,"CH1MIN")==0)
+	{
+		switch_val=18;
+	}
+	else if (strcmp(arr1,"CH2MAX")==0)
+	{
+		switch_val=19;
+	}
+	else if (strcmp(arr1,"CH2MIN")==0)
+	{
+		switch_val=20;
+	}
+	else if (strcmp(arr1,"CH3MAX")==0)
+	{
+		switch_val=21;
+	}
+	else if (strcmp(arr1,"CH3MIN")==0)
+	{
+		switch_val=22;
+	}
+	else if (strcmp(arr1,"CH4MAX")==0)
+	{
+		switch_val=23;
+	}
+	else if (strcmp(arr1,"CH4MIN")==0)
+	{
+		switch_val=24;
 	}
 
 
@@ -552,8 +575,44 @@ void pin_config()
 	case 16:
 		strncpy(d.link,arr2,strlen(arr2));
 		break;
+	case 17:
+		d.ch1Max = atof(arr2);
+		break;
+	case 18:
+		d.ch1Min = atof(arr2);
+		break;
+	case 19:
+		d.ch2Max = atof(arr2);
+		break;
+	case 20:
+		d.ch2Min = atof(arr2);
+		break;
+	case 21:
+		d.ch3Max = atof(arr2);
+		break;
+	case 22:
+		d.ch3Min = atof(arr2);
+		break;
+	case 23:
+		d.ch4Max = atof(arr2);
+		break;
+	case 24:
+		d.ch4Min = atof(arr2);
+		break;
 	default:
 		break;
 	}
 }
+
+void channelGpioPins()
+{
+	user_GPIO_Init(GPIOB, GPIO_PIN_12, OUTPUT);
+	user_GPIO_Init(GPIOC, GPIO_PIN_10, OUTPUT);
+	user_GPIO_Init(GPIOC, GPIO_PIN_11, OUTPUT);
+	user_GPIO_Init(GPIOC, GPIO_PIN_12, OUTPUT);
+	user_GPIO_Init(GPIOC, GPIO_PIN_3, OUTPUT);
+	user_GPIO_Init(GPIOC, GPIO_PIN_2, OUTPUT);
+}
+
+
 

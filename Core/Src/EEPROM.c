@@ -65,28 +65,32 @@ void EEPROM_Write (uint16_t page, uint16_t offset, uint8_t *data, uint16_t size)
 	uint16_t numofpages = (endPage-startPage) + 1;
 	uint16_t pos=0;
 
-		for (int i=0; i<numofpages; i++)
+	for (int i=0; i<numofpages; i++)
+	{
+		uint8_t attempt=0;
+		uint16_t MemAddress = startPage<<paddrposition | offset;
+		uint16_t bytesremaining = bytestowrite(size, offset);
+
+		while(attempt<2)
 		{
-			uint16_t MemAddress = startPage<<paddrposition | offset;
-			uint16_t bytesremaining = bytestowrite(size, offset);
-
-
 			if (HAL_I2C_Mem_Write(EEPROM_I2C, EEPROM_ADDR, MemAddress, 2, &data[pos], bytesremaining, 1000) == HAL_OK)
 			{
 				uart3_tx((uint8_t*) "EEPROM Write OK\r\n");
+				break;
 			}
 			else
 			{
+				attempt++;
 				uart3_tx((uint8_t*) "EEPROM Write FAILED\r\n");
+				HAL_Delay(10);
 			}
-
-
-			startPage += 1;
-			offset=0;
-			size = size-bytesremaining;
-			pos += bytesremaining;
-			HAL_Delay (10);
 		}
+		startPage += 1;
+		offset=0;
+		size = size-bytesremaining;
+		pos += bytesremaining;
+		HAL_Delay (10);
+	}
 
 }
 
@@ -98,17 +102,27 @@ void EEPROM_Read (uint16_t page, uint16_t offset, uint8_t *data, uint16_t size)
 	uint16_t numofpages = (endPage-startPage) + 1;
 	uint16_t pos=0;
 
+
 	for (int i=0; i<numofpages; i++)
 	{
+		uint8_t attempt=0;
 		uint16_t MemAddress = startPage<<paddrposition | offset;
 		uint16_t bytesremaining = bytestowrite(size, offset);
-		if (HAL_I2C_Mem_Read(EEPROM_I2C, EEPROM_ADDR, 	MemAddress, 2, &data[pos], bytesremaining, 1000) == HAL_OK)
+
+		while(attempt<2)
 		{
-			uart3_tx((uint8_t*) "EEPROM Read OK\r\n");
-		}
-		else
-		{
-			uart3_tx((uint8_t*) "EEPROM Read FAILED\r\n");
+			if (HAL_I2C_Mem_Read(EEPROM_I2C, EEPROM_ADDR, 	MemAddress, 2, &data[pos], bytesremaining, 1000) == HAL_OK)
+			{
+				uart3_tx((uint8_t*) "EEPROM Read OK\r\n");
+				break;
+			}
+			else
+			{
+				attempt++;
+				uart3_tx((uint8_t*) "EEPROM Read FAILED\r\n");
+				HAL_Delay(10);
+			}
+
 		}
 		startPage += 1;
 		offset=0;
@@ -117,6 +131,8 @@ void EEPROM_Read (uint16_t page, uint16_t offset, uint8_t *data, uint16_t size)
 		HAL_Delay(10);
 	}
 }
+
+
 
 void EEPROM_PageErase (uint16_t page)
 {
@@ -186,28 +202,31 @@ void EEPROM_ReadAllMessagesAndErase(void)
 
         memset(buffer, 0, sizeof(buffer));
         EEPROM_Read(page, offset, (uint8_t *)buffer, MAX_MESSAGE_LEN);
-		if(d.WiFi==1&&d.GSM==0)
-		{
-			if(!DatatoESP(buffer))
+        if(buffer[0]!='\0')
+        {
+			if(d.WiFi==1&&d.GSM==0)
 			{
-				allUploaded=false;
-			}
-		}
-		else if(d.WiFi==0&&d.GSM==1)
-		{
-			if(d.Mode==0)
-			{
-				GSM_SendSMS(buffer);
-			}
-			if(d.Mode==1)
-			{
-				if(!GSMInitGsheet()||!HTTPInitAndSend(buffer))
+				if(!DatatoESP(buffer))
 				{
 					allUploaded=false;
 				}
-
 			}
-		}
+			else if(d.WiFi==0&&d.GSM==1)
+			{
+				if(d.Mode==0)
+				{
+					GSM_SendSMS(buffer);
+				}
+				if(d.Mode==1)
+				{
+					if(!GSMInitGsheet()||!HTTPInitAndSend(buffer))
+					{
+						allUploaded=false;
+					}
+
+				}
+			}
+        }
     }
 
     // Erase all used pages including metadata

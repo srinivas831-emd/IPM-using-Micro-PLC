@@ -7,6 +7,7 @@
 
 
 #include "circular_queue.h"
+#include "com_terminal.h"
 
 void CircularQueue_Init(CircularQueue *queue) {
     queue->head = 0;

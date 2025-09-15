@@ -70,7 +70,7 @@ void ADC_handler(struct data *d)
 		ADC_select_CH4();
 		adc_start();
 		adc_conversion();
-		d->adc4_value = (100*(voltage_cal()));
+		d->adc4_value = ((voltage_cal())/0.01);
 		adc_stop();
 	}
 	else if (d->adcChnlChecker[3] == 0)
@@ -78,32 +78,61 @@ void ADC_handler(struct data *d)
 		d->adc4_value=0.0000;
 	}
 
+				if(d->adc1_value==0||d->adc2_value==0||d->adc3_value==0)
+				{
+					d->MDS_value = 0.0000;
+				}
+				else
+				{
+					d->MDS_value=(d->adc1_value*d->adc2_value)/d->adc3_value;
+				}
 
-			if(d->adc1_value==0||d->adc2_value==0||d->adc3_value==0)
-			{
-				d->MDS_value = 0.0000;
-			}
-			else
-			{
-			d->MDS_value=(d->adc1_value*d->adc2_value)/d->adc3_value;
-			}
-
-			if(d->threshold<=0)
-			{
-				d->MDS_PIN = write_gpio(GPIOB,GPIO_PIN_12, PIN_RESET);
-				HAL_Delay(1000);
-			}
-			else
-			{
-				if(d->adc4_value>=d->threshold)
+				if(d->MDS_value>=d->threshold)
 				{
 					d->MDS_PIN = write_gpio(GPIOB,GPIO_PIN_12, PIN_SET);
-					HAL_Delay(1000);
 				}
 				else
 				{
 					d->MDS_PIN = write_gpio(GPIOB,GPIO_PIN_12, PIN_RESET);
-					HAL_Delay(1000);
 				}
-			}
+
+				if(d->adc1_value<=d->ch1Min||d->adc1_value>=d->ch1Max)
+				{
+					d->MDS_PIN = write_gpio(GPIOC,GPIO_PIN_2, PIN_SET);
+				}
+				else
+				{
+					d->MDS_PIN = write_gpio(GPIOC,GPIO_PIN_2, PIN_RESET);
+				}
+
+
+				if(d->adc2_value<=d->ch2Min||d->adc2_value>=d->ch2Max)
+				{
+					d->MDS_PIN = write_gpio(GPIOC,GPIO_PIN_11, PIN_SET);
+				}
+				else
+				{
+					d->MDS_PIN = write_gpio(GPIOC,GPIO_PIN_11, PIN_RESET);
+				}
+
+
+				if(d->adc3_value<=d->ch3Min||d->adc3_value>=d->ch3Max)
+				{
+					d->MDS_PIN = write_gpio(GPIOC,GPIO_PIN_12, PIN_SET);
+				}
+				else
+				{
+					d->MDS_PIN = write_gpio(GPIOC,GPIO_PIN_12, PIN_RESET);
+				}
+
+
+				if(d->adc4_value<=d->ch4Min||d->adc4_value>=d->ch4Max)
+				{
+					d->MDS_PIN = write_gpio(GPIOC,GPIO_PIN_3, PIN_SET);
+				}
+				else
+				{
+					d->MDS_PIN = write_gpio(GPIOC,GPIO_PIN_3, PIN_RESET);
+				}
+
 }

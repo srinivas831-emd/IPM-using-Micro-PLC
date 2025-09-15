@@ -17,6 +17,14 @@ struct data
 	float adc3_value;
 	float adc4_value;
 	float MDS_value;
+	float ch1Max;
+	float ch1Min;
+	float ch2Max;
+	float ch2Min;
+	float ch3Max;
+	float ch3Min;
+	float ch4Max;
+	float ch4Min;
 	uint8_t GPIO[4];
 	uint8_t scan_time;
 	uint8_t adcChnlChecker[4];
